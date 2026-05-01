@@ -626,38 +626,34 @@ namespace inicpp
 				return;
 			}
 
-			if (!_iniFile.is_open())
-			{
-				_iniFile.clear();
-				_iniFile.open(_configFileName, std::ifstream::in | std::ifstream::out | std::fstream::app);
-			}
+			std::fstream input;
+			input.open(_configFileName.c_str(), std::ifstream::in | std::ifstream::out | std::fstream::app);
 
-			if (!_iniFile.is_open())
+			if (!input.is_open())
 			{
 				INI_DEBUG("Failed to open(WR),try to open with readonly(R).");
-				_iniFile.clear();
-				_iniFile.open(_configFileName, std::ifstream::in);
+				input.clear();
+				input.open(_configFileName.c_str(), std::ifstream::in);
 			}
 
-			if (!_iniFile.is_open())
+			if (!input.is_open())
 			{
 				INI_DEBUG("Failed to open the input INI file for parsing! file:" << _configFileName);
 				return;
 			}
 
-			_iniData.clear();
+			ini parsed;
+			parsed.setParent(this);
 
-			_iniFile.seekg(0, _iniFile.beg);
+			input.seekg(0, input.beg);
 			std::string data, sectionName;
 			int sectionLine = -1;
 
 			section sectionRecord;
 
 			_SumOfLines = 1;
-			do
+			while (std::getline(input, data))
 			{
-				std::getline(_iniFile, data);
-
 				if (!filterData(data))
 				{
 					++_SumOfLines;
@@ -668,7 +664,7 @@ namespace inicpp
 				{
 					if (!sectionRecord.isEmpty() || sectionRecord.name() != "")
 					{
-						_iniData.addSection(sectionRecord);
+						parsed.addSection(sectionRecord);
 					}
 
 					size_t first = data.find('[');
@@ -700,19 +696,15 @@ namespace inicpp
 				}
 
 				++_SumOfLines;
-
-			} while (!_iniFile.eof());
+			}
 
 			if (!sectionRecord.isEmpty())
 			{
 				sectionRecord.setName(sectionName, -1);
-				_iniData.addSection(sectionRecord);
+				parsed.addSection(sectionRecord);
 			}
 
-			if (_iniFile.is_open())
-			{
-				_iniFile.close();
-			}
+			_iniData = parsed;
 		}
 
 		bool set(const std::string &Section, const std::string &Key, const std::string &Value, const std::string &comment = "") override
