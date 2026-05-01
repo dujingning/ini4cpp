@@ -22,6 +22,20 @@ The INI header-only library for Modern C++ supports **reading**, **writing**, an
 
 - New Feature : [Super Easy Binding to Your Data Structures (For Read)](#7super-easy-binding-to-your-data-structures-read).
 
+#### Supported INI syntax
+
+When reading INI files, inicpp supports these common forms:
+
+- UTF-8 BOM at the beginning of the file.
+- Section headers such as `[server]`, `  [server]`, and `[ server ]`.
+- Key-value lines using `=` or `:`, such as `port=8080` and `host: localhost`.
+- Empty values in existing files, such as `key=`.
+- Full-line comments using `;` or `#`, including lines with leading whitespace.
+- Inline comments after whitespace, such as `key=value ; comment` and `key=value # comment`.
+- Comment markers inside quoted or escaped values are preserved, such as `text="a ; b"` and `path=C:\tmp;cache`.
+
+Quoted values are returned as written; inicpp does not automatically remove quotes or unescape values. Multiline values, bare keys without `=` or `:`, and full formatting-preserving round trips are not supported.
+
 
 ---
 
@@ -328,4 +342,3 @@ jn@jn:~/inicpp/example$
 
 ### Ⅴ、End
  The project was created by **DuJingning**.
-

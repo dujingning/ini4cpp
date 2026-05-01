@@ -658,44 +658,32 @@ namespace inicpp
 			_SumOfLines = 1;
 			while (std::getline(input, data))
 			{
+				stripUtf8Bom(data, _SumOfLines == 1);
+
 				if (!filterData(data))
 				{
 					++_SumOfLines;
 					continue;
 				}
 
-				if (data.find('[') == 0) // section
+				if (parseSectionHeader(data, sectionName)) // section
 				{
 					if (!sectionRecord.isEmpty() || sectionRecord.name() != "")
 					{
 						parsed.addSection(sectionRecord);
 					}
 
-					size_t first = data.find('[');
-					size_t last = data.find(']');
-
-					if (last == std::string::npos)
-					{
-						++_SumOfLines;
-						continue;
-					}
-
-					sectionName = data.substr(first + 1, last - first - 1);
 					sectionLine = _SumOfLines;
 
 					sectionRecord.clear();
 					sectionRecord.setName(sectionName, sectionLine);
+					++_SumOfLines;
+					continue;
 				}
 
-				size_t pos = data.find('=');
-				if (pos != std::string::npos)
+				std::string key, value;
+				if (parseKeyValueLine(data, key, value))
 				{ // k=v
-					std::string key = data.substr(0, pos);
-					std::string value = data.substr(pos + 1);
-
-					trimEdges(key);
-					trimEdges(value);
-
 					sectionRecord.setValue(key, value, _SumOfLines);
 				}
 
@@ -1043,19 +1031,14 @@ namespace inicpp
 			return true;
 		}
 
-		bool filterData(std::string &data)
+		bool filterData(const std::string &data) const
 		{
 			if (data.length() == 0)
 			{
 				return false;
 			}
 
-			if (data[0] == ';')
-			{
-				return false;
-			}
-
-			if (data[0] == '#')
+			if (isCommentLine(data))
 			{
 				return false;
 			}
@@ -1063,7 +1046,164 @@ namespace inicpp
 			return true;
 		}
 
-		void trimEdges(std::string &data)
+		static bool isSpace(const char c)
+		{
+			return std::isspace(static_cast<unsigned char>(c)) != 0;
+		}
+
+		static std::string::size_type firstNonSpace(const std::string &data)
+		{
+			std::string::size_type pos = 0;
+			while (pos < data.size() && isSpace(data[pos]))
+			{
+				++pos;
+			}
+			return pos;
+		}
+
+		bool isCommentLine(const std::string &data) const
+		{
+			const std::string::size_type pos = firstNonSpace(data);
+			return pos < data.size() && (data[pos] == ';' || data[pos] == '#');
+		}
+
+		static void stripUtf8Bom(std::string &data, const bool isFirstLine)
+		{
+			if (!isFirstLine || data.size() < 3)
+			{
+				return;
+			}
+
+			if (static_cast<unsigned char>(data[0]) == 0xEF &&
+				static_cast<unsigned char>(data[1]) == 0xBB &&
+				static_cast<unsigned char>(data[2]) == 0xBF)
+			{
+				data.erase(0, 3);
+			}
+		}
+
+		static std::string::size_type findInlineCommentStart(const std::string &data)
+		{
+			bool inSingleQuote = false;
+			bool inDoubleQuote = false;
+			bool escaped = false;
+
+			for (std::string::size_type i = 0; i < data.size(); ++i)
+			{
+				const char c = data[i];
+
+				if (escaped)
+				{
+					escaped = false;
+					continue;
+				}
+
+				if (c == '\\')
+				{
+					escaped = true;
+					continue;
+				}
+
+				if (c == '\'' && !inDoubleQuote)
+				{
+					inSingleQuote = !inSingleQuote;
+					continue;
+				}
+
+				if (c == '"' && !inSingleQuote)
+				{
+					inDoubleQuote = !inDoubleQuote;
+					continue;
+				}
+
+				if ((c == ';' || c == '#') && !inSingleQuote && !inDoubleQuote)
+				{
+					if (i == 0 || isSpace(data[i - 1]))
+					{
+						return i;
+					}
+				}
+			}
+
+			return std::string::npos;
+		}
+
+		void stripInlineComment(std::string &data)
+		{
+			const std::string::size_type commentStart = findInlineCommentStart(data);
+			if (commentStart != std::string::npos)
+			{
+				data.erase(commentStart);
+				trimEdges(data);
+			}
+		}
+
+		bool parseSectionHeader(const std::string &line, std::string &sectionName)
+		{
+			std::string data = line;
+			stripInlineComment(data);
+			trimEdges(data);
+
+			if (data.empty() || data[0] != '[')
+			{
+				return false;
+			}
+
+			const std::string::size_type last = data.find(']');
+			if (last == std::string::npos)
+			{
+				return false;
+			}
+
+			std::string tail = data.substr(last + 1);
+			trimEdges(tail);
+			if (!tail.empty())
+			{
+				return false;
+			}
+
+			std::string parsedName = data.substr(1, last - 1);
+			trimEdges(parsedName);
+			if (parsedName.empty())
+			{
+				return false;
+			}
+
+			sectionName = parsedName;
+			return true;
+		}
+
+		static std::string::size_type findKeyValueDelimiter(const std::string &data)
+		{
+			const std::string::size_type equals = data.find('=');
+			if (equals != std::string::npos)
+			{
+				return equals;
+			}
+			return data.find(':');
+		}
+
+		bool parseKeyValueLine(const std::string &line, std::string &key, std::string &value)
+		{
+			std::string data = line;
+			stripInlineComment(data);
+
+			const std::string::size_type pos = findKeyValueDelimiter(data);
+			if (pos == std::string::npos)
+			{
+				return false;
+			}
+
+			key = data.substr(0, pos);
+			value = data.substr(pos + 1);
+
+			trimEdges(key);
+			trimEdges(value);
+
+			return !key.empty();
+		}
+
+		static void trimEdges(std::string &data)
 		{
 			// remove left ' ' and '\t'
 			data.erase(data.begin(), std::find_if(data.begin(), data.end(), [](unsigned char c)
