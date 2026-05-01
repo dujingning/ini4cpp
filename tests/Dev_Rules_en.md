@@ -38,6 +38,9 @@ This file records the project rules that should be followed when changing
 - Duplicate keys in the same section use the last parsed value.
 - Duplicate section headers are merged, and repeated keys use the last parsed
   value.
+- `ValueProxy` reads must throw when the section/key is missing, including
+  `std::string`, `bool`, and `get<T>()` conversions. Existing empty values are
+  valid values and must not be treated as missing.
 - Do not silently add new INI dialect features, such as multiline values, bare
   keys, quote removal, arrays, includes, or nested sections, without updating
   tests and README.

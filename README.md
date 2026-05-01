@@ -73,7 +73,7 @@ int main()
 
 
 #### 2.read example
-Convert: From string to typed values. Numeric and custom `get<T>()` conversions throw `std::runtime_error` when conversion fails. `std::string` conversion returns the stored text, and `bool` conversion treats only `"0"`, `"false"`, and `"no"` as false.
+Convert: From string to typed values. `operator[]` value conversions, including `std::string`, `bool`, and `get<T>()`, throw `std::runtime_error` when the section/key is missing or conversion fails. Existing empty values are valid and convert to an empty `std::string`; use `toString()`, `toInt()`, and `toDouble()` for non-throwing default-value reads. `bool` conversion treats only `"0"`, `"false"`, and `"no"` as false.
 ```cpp
 #include "inicpp.hpp"
 #include <iostream>

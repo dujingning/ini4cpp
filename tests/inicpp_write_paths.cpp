@@ -231,6 +231,37 @@ namespace
 		std::remove(path.c_str());
 	}
 
+	void test_value_proxy_assignment_creates_missing_key()
+	{
+		const std::string path = temp_path("proxy_creates_missing_key");
+		write_file(path, "");
+
+		inicpp::IniManager ini(path);
+		ini["System"]["LogLevel"] = std::string("debug");
+
+		inicpp::IniManager loaded(path);
+		CHECK_EQ(std::string("debug"), loaded["System"].toString("LogLevel"));
+		CHECK_TRUE(read_file(path).find("[System]\nLogLevel=debug\n") != std::string::npos);
+
+		std::remove(path.c_str());
+	}
+
+	void test_value_proxy_assignment_creates_missing_empty_value()
+	{
+		const std::string path = temp_path("proxy_creates_missing_empty_value");
+		write_file(path, "");
+
+		inicpp::IniManager ini(path);
+		ini["System"]["LogLevel"] = std::string("");
+
+		inicpp::IniManager loaded(path);
+		CHECK_TRUE(loaded["System"].isKeyExists("LogLevel"));
+		CHECK_EQ(std::string(""), loaded["System"].toString("LogLevel"));
+		CHECK_TRUE(read_file(path).find("[System]\nLogLevel=\n") != std::string::npos);
+
+		std::remove(path.c_str());
+	}
+
 	void test_comment_with_existing_semicolon_is_not_double_prefixed()
 	{
 		const std::string path = temp_path("semicolon_comment");
@@ -372,6 +403,8 @@ int main()
 	test_rejects_empty_key_without_changing_file();
 	test_set_writes_empty_value();
 	test_value_proxy_assignment_writes_existing_key_to_empty_value();
+	test_value_proxy_assignment_creates_missing_key();
+	test_value_proxy_assignment_creates_missing_empty_value();
 	test_comment_with_existing_semicolon_is_not_double_prefixed();
 	test_comment_with_existing_hash_is_not_semicolon_prefixed();
 	test_set_replaces_leading_whitespace_hash_comment();

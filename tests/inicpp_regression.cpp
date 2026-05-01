@@ -195,6 +195,107 @@ namespace
 
 		std::remove(path.c_str());
 	}
+
+	void test_missing_string_conversion_throws()
+	{
+		const std::string path = temp_path("missing_string");
+		write_file(path, "");
+
+		inicpp::IniManager ini(path);
+
+		bool threw = false;
+		try
+		{
+			std::string value = ini["System"]["LogLevel"];
+			(void)value;
+		}
+		catch (const std::runtime_error &)
+		{
+			threw = true;
+		}
+
+		CHECK_TRUE(threw);
+		std::remove(path.c_str());
+	}
+
+	void test_missing_get_string_throws()
+	{
+		const std::string path = temp_path("missing_get_string");
+		write_file(path, "");
+
+		inicpp::IniManager ini(path);
+
+		bool threw = false;
+		try
+		{
+			std::string value = ini["System"]["LogLevel"].get<std::string>();
+			(void)value;
+		}
+		catch (const std::runtime_error &)
+		{
+			threw = true;
+		}
+
+		CHECK_TRUE(threw);
+		std::remove(path.c_str());
+	}
+
+	void test_missing_bool_conversion_throws()
+	{
+		const std::string path = temp_path("missing_bool");
+		write_file(path, "");
+
+		inicpp::IniManager ini(path);
+
+		bool threw = false;
+		try
+		{
+			bool value = ini["System"]["enabled"];
+			(void)value;
+		}
+		catch (const std::runtime_error &)
+		{
+			threw = true;
+		}
+
+		CHECK_TRUE(threw);
+		std::remove(path.c_str());
+	}
+
+	void test_existing_empty_string_value_does_not_throw()
+	{
+		const std::string path = temp_path("existing_empty_string");
+		write_file(path, "[System]\nLogLevel=\n");
+
+		inicpp::IniManager ini(path);
+
+		std::string value = ini["System"]["LogLevel"];
+		CHECK_EQ(std::string(""), value);
+		CHECK_EQ(std::string(""), ini["System"]["LogLevel"].get<std::string>());
+		CHECK_EQ(std::string(""), ini["System"]["LogLevel"].String());
+
+		std::remove(path.c_str());
+	}
+
+	void test_missing_lookup_does_not_create_section_in_memory()
+	{
+		const std::string path = temp_path("missing_lookup_no_mutation");
+		write_file(path, "");
+
+		inicpp::IniManager ini(path);
+
+		try
+		{
+			std::string value = ini["System"]["LogLevel"];
+			(void)value;
+		}
+		catch (const std::runtime_error &)
+		{
+		}
+
+		CHECK_TRUE(!ini.isSectionExists("System"));
+		std::remove(path.c_str());
+	}
 }
 
 int main()
@@ -202,6 +303,11 @@ int main()
 	test_public_api_roundtrip();
 	test_conversion_errors();
 	test_update_replaces_single_key();
+	test_missing_string_conversion_throws();
+	test_missing_get_string_throws();
+	test_missing_bool_conversion_throws();
+	test_existing_empty_string_value_does_not_throw();
+	test_missing_lookup_does_not_create_section_in_memory();
 	std::cout << "inicpp_regression: PASS" << std::endl;
 	return 0;
 }

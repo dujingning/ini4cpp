@@ -139,10 +139,19 @@ namespace inicpp
 		T get() const
 		{
 			static_assert(!std::is_pointer<T>::value, "Pointer types are not supported for conversion.");
+			ensureExists();
 			return getValue<T>();
 		}
 
 	private:
+		void ensureExists() const
+		{
+			if (!_exists)
+			{
+				throw std::runtime_error("Key not found. with(section-key): " + _sectionName + "-" + _keyName);
+			}
+		}
+
 		template <typename T>
 		typename std::enable_if<std::is_same<T, std::string>::value, T>::type getValue() const
 		{
@@ -179,6 +188,7 @@ namespace inicpp
 		// false:'0' or 'false', true : others
 		operator bool() const
 		{
+			ensureExists();
 			if (_value == "0" || _value == "false" || _value == "no")
 			{
 				return false;
@@ -188,11 +198,13 @@ namespace inicpp
 
 		operator std::string() const
 		{
+			ensureExists();
 			return _value;
 		}
 
 		friend std::ostream &operator<<(std::ostream &os, const ValueProxy &proxy)
 		{
+			proxy.ensureExists();
 			os << proxy._value;
 			return os;
 		}
@@ -203,31 +215,39 @@ namespace inicpp
 		{
 			std::string value = this->to_string(other);
 
-			if (_value != value)
+			if (!_exists || _value != value)
 			{
 				set(value);
 			}
 
 			_value = value;
+			_exists = true;
 			return *this;
 		}
 
 		ValueProxy &operator=(const std::string &other)
 		{
-			if (_value != other)
+			if (!_exists || _value != other)
 			{
 				INICPP_DEBUG_LOG("Value Proxy Wanna Set Value: " << other);
 				set(other);
 			}
 
 			_value = other;
+			_exists = true;
 			return *this;
 		}
 
 		// specify std::string
-		const std::string &String() const noexcept
+		const std::string &String() const
 		{
+			ensureExists();
 			return _value;
+		}
+
+		inline void setReadState(const bool exists)
+		{
+			_exists = exists;
 		}
 
 		inline void setWriteCB(parentHelper *sectionObj, const std::string &sectionName, const std::string &keyName)
@@ -255,6 +275,7 @@ namespace inicpp
 
 		std::string _sectionName, _keyName;
 		parentHelper *_section = nullptr;
+		bool _exists = true;
 	};
 } // namespace inicpp
 
@@ -411,8 +432,10 @@ namespace inicpp
 		// Automatically converts to any type; throws std::runtime_error if not found or conversion fails
 		ValueProxy operator[](const std::string &Key)
 		{
+			const bool exists = isKeyExists(Key);
 			ValueProxy vp(_sectionMap[Key].Value);
 
+			vp.setReadState(exists);
 			vp.setWriteCB(this, _sectionName, Key);
 
 			return vp;
@@ -595,6 +618,14 @@ namespace inicpp
 		parentHelper *parent() override { return _parent; }
 		void setParent(parentHelper *parent) override { _parent = parent; }
 
+	private:
+		friend class IniManager;
+
+		parentHelper *asParentHelper()
+		{
+			return this;
+		}
+
 	protected:
 		std::map<std::string /*Section Name*/, section> _iniInfoMap;
 
@@ -650,6 +681,13 @@ namespace inicpp
 
 		section operator[](const std::string &sectionName)
 		{
+			if (!_iniData.isSectionExists(sectionName))
+			{
+				section missingSection(sectionName);
+				missingSection.setParent(_iniData.asParentHelper());
+				return missingSection;
+			}
+
 			return _iniData[sectionName];
 		}
 
