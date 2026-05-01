@@ -25,8 +25,11 @@
 #ifndef __JN_INICPP_H__
 #define __JN_INICPP_H__
 
+#include <cctype>
 #include <cstddef>
+#include <cstdio>
 #include <stdexcept>
+#include <type_traits>
 
 #include <fstream>
 #include <sstream>
@@ -35,6 +38,10 @@
 #include <string>
 #include <list>
 #include <map>
+
+#if defined(_ENABLE_INICPP_STD_WSTRING_) && !defined(_ENBABLE_INICPP_STD_WSTRING_)
+#define _ENBABLE_INICPP_STD_WSTRING_
+#endif
 
 #ifdef _ENBABLE_INICPP_STD_WSTRING_ // Not all of C++ 11 support <codecvt>
 // for std::string <==> std::wstring convert
@@ -80,6 +87,8 @@ namespace inicpp
 	class parentHelper
 	{
 	public:
+		virtual ~parentHelper() {}
+
 		virtual parentHelper *parent()
 		{
 			INI_DEBUG("called parentHelper virtual impl: need to impl parent");
@@ -87,10 +96,15 @@ namespace inicpp
 		}
 		virtual void setParent(parentHelper *parent)
 		{
+			(void)parent;
 			INI_DEBUG("called parentHelper virtual impl: need to impl setParent");
 		}
 		virtual bool set(const std::string &Section, const std::string &Key, const std::string &Value, const std::string &comment = "")
 		{
+			(void)Section;
+			(void)Key;
+			(void)Value;
+			(void)comment;
 			INI_DEBUG("called parentHelper virtual impl: need to impl set");
 			return true;
 		}
