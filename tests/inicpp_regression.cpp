@@ -172,6 +172,7 @@ namespace
 		const std::string file = read_file(path);
 		CHECK_EQ(static_cast<std::size_t>(1), count_substring(file, "port="));
 		CHECK_TRUE(file.find(";new port") != std::string::npos);
+		CHECK_TRUE(file.find(";old port") == std::string::npos);
 
 		std::remove(path.c_str());
 	}
