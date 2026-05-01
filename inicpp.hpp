@@ -839,7 +839,7 @@ namespace inicpp
 	private:
 		bool buildUpdatedFileContent(const std::string &Section, const std::string &key, const std::string &keyValueData, const std::string &comment, std::string &content)
 		{
-			std::fstream input(_configFileName.c_str(), std::ifstream::in);
+			std::ifstream input(_configFileName.c_str(), std::ifstream::in);
 			std::ostringstream output;
 
 			if (!input.is_open())
