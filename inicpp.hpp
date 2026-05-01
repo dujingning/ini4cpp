@@ -1037,7 +1037,7 @@ namespace inicpp
 
 			if (std::remove(backupFile.c_str()) != 0)
 			{
-				return false;
+				INI_DEBUG("Failed to remove backup file: " << backupFile);
 			}
 
 			return true;
