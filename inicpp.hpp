@@ -203,7 +203,7 @@ namespace inicpp
 		}
 
 		// specify std::string
-		const std::string &String() noexcept
+		const std::string &String() const noexcept
 		{
 			return _value;
 		}
@@ -250,18 +250,19 @@ namespace inicpp
 		{
 		}
 
-		const std::string &name()
+		const std::string &name() const
 		{
 			return _sectionName;
 		}
 
-		const std::string getValue(const std::string &Key)
+		const std::string getValue(const std::string &Key) const
 		{
-			if (!_sectionMap.count(Key))
+			const ValueNode *node = findValue(Key);
+			if (!node)
 			{
 				return "";
 			}
-			return _sectionMap[Key].Value;
+			return node->Value;
 		}
 
 		void setName(const std::string &name, const int &lineNumber)
@@ -276,17 +277,17 @@ namespace inicpp
 			_sectionMap[Key].lineNumber = line;
 		}
 
-		void append(section &sec)
+		void append(const section &sec)
 		{
 			_sectionMap.insert(sec._sectionMap.begin(), sec._sectionMap.end());
 		}
 
-		bool isKeyExist(const std::string &Key)
+		bool isKeyExist(const std::string &Key) const
 		{
-			return !_sectionMap.count(Key) ? false : true;
+			return findValue(Key) != nullptr;
 		}
 
-		int getEndSection()
+		int getEndSection() const
 		{
 			int line = -1;
 
@@ -305,13 +306,14 @@ namespace inicpp
 			return line;
 		}
 
-		int getLine(const std::string &Key)
+		int getLine(const std::string &Key) const
 		{
-			if (!_sectionMap.count(Key))
+			const ValueNode *node = findValue(Key);
+			if (!node)
 			{
 				return -1;
 			}
-			return _sectionMap[Key].lineNumber;
+			return node->lineNumber;
 		}
 
 		void clear()
@@ -326,9 +328,10 @@ namespace inicpp
 			return _sectionMap.empty();
 		}
 
-		int toInt(const std::string &Key) noexcept
+		int toInt(const std::string &Key) const noexcept
 		{
-			if (!_sectionMap.count(Key))
+			const ValueNode *node = findValue(Key);
+			if (!node)
 			{
 				return 0;
 			}
@@ -337,40 +340,42 @@ namespace inicpp
 
 			try
 			{
-				result = std::stoi(_sectionMap[Key].Value);
+				result = std::stoi(node->Value);
 			}
 			catch (const std::invalid_argument &e)
 			{
-				INI_DEBUG("Invalid argument: " << e.what() << ",input:\'" << _sectionMap[Key].Value << "\'");
+				INI_DEBUG("Invalid argument: " << e.what() << ",input:\'" << node->Value << "\'");
 			}
 			catch (const std::out_of_range &e)
 			{
-				INI_DEBUG("Out of range: " << e.what() << ",input:\'" << _sectionMap[Key].Value << "\'");
+				INI_DEBUG("Out of range: " << e.what() << ",input:\'" << node->Value << "\'");
 			}
 
 			return result;
 		}
 
-		std::string toString(const std::string &Key) noexcept
+		std::string toString(const std::string &Key) const noexcept
 		{
-			if (!_sectionMap.count(Key))
+			const ValueNode *node = findValue(Key);
+			if (!node)
 			{
 				return "";
 			}
-			return _sectionMap[Key].Value;
+			return node->Value;
 		}
 
 #ifdef _ENBABLE_INICPP_STD_WSTRING_
-		std::wstring toWString(const std::string &Key)
+		std::wstring toWString(const std::string &Key) const
 		{
 			std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 			return converter.from_bytes(toString(Key));
 		}
 #endif
 
-		double toDouble(const std::string &Key) noexcept
+		double toDouble(const std::string &Key) const noexcept
 		{
-			if (!_sectionMap.count(Key))
+			const ValueNode *node = findValue(Key);
+			if (!node)
 			{
 				return 0.0;
 			}
@@ -379,25 +384,25 @@ namespace inicpp
 
 			try
 			{
-				result = std::stod(_sectionMap[Key].Value);
+				result = std::stod(node->Value);
 			}
 			catch (const std::invalid_argument &e)
 			{
-				INI_DEBUG("Invalid argument: " << e.what() << ",input:\'" << _sectionMap[Key].Value << "\'");
+				INI_DEBUG("Invalid argument: " << e.what() << ",input:\'" << node->Value << "\'");
 			}
 			catch (const std::out_of_range &e)
 			{
-				INI_DEBUG("Out of range: " << e.what() << ",input:\'" << _sectionMap[Key].Value << "\'");
+				INI_DEBUG("Out of range: " << e.what() << ",input:\'" << node->Value << "\'");
 			}
 
 			return result;
 		}
 
-		std::map<std::string /*Key*/, std::string /*Value*/> getSectionMap()
+		std::map<std::string /*Key*/, std::string /*Value*/> getSectionMap() const
 		{
 			std::map<std::string /*Key*/, std::string /*Value*/> sectionKVMap;
 
-			for (auto &iter : _sectionMap)
+			for (const auto &iter : _sectionMap)
 			{
 				sectionKVMap[iter.first] = iter.second.Value;
 			}
@@ -419,6 +424,26 @@ namespace inicpp
 		inline void setParent(parentHelper *parent) override { _parent = parent; };
 
 	private:
+		ValueNode *findValue(const std::string &Key)
+		{
+			std::map<std::string, ValueNode>::iterator it = _sectionMap.find(Key);
+			if (it == _sectionMap.end())
+			{
+				return nullptr;
+			}
+			return &it->second;
+		}
+
+		const ValueNode *findValue(const std::string &Key) const
+		{
+			std::map<std::string, ValueNode>::const_iterator it = _sectionMap.find(Key);
+			if (it == _sectionMap.end())
+			{
+				return nullptr;
+			}
+			return &it->second;
+		}
+
 		std::string _sectionName;
 		std::map<std::string /*Key*/, ValueNode> _sectionMap;
 		int _lineNumber = -1; // text line start with 1
@@ -450,13 +475,13 @@ namespace inicpp
 			return;
 		}
 
-		bool isSectionExists(const std::string &sectionName)
+		bool isSectionExists(const std::string &sectionName) const
 		{
-			return !_iniInfoMap.count(sectionName) ? false : true;
+			return findSection(sectionName) != nullptr;
 		}
 
 		// may contains default of Unnamed section with ""
-		std::list<std::string> getSectionsList()
+		std::list<std::string> getSectionsList() const
 		{
 			std::list<std::string> sectionList;
 			for (const auto &data : _iniInfoMap)
@@ -470,14 +495,15 @@ namespace inicpp
 			return sectionList;
 		}
 
-		std::map<std::string /*key*/, std::string /*value*/> getSectionMap(const std::string &sectionName)
+		std::map<std::string /*key*/, std::string /*value*/> getSectionMap(const std::string &sectionName) const
 		{
 			std::map<std::string /*key*/, std::string /*value*/> kvMap;
-			if (_iniInfoMap.count(sectionName) == 0)
+			const section *sec = findSection(sectionName);
+			if (!sec)
 			{
 				return kvMap;
 			}
-			return _iniInfoMap[sectionName].getSectionMap();
+			return sec->getSectionMap();
 		}
 
 		const section &operator[](const std::string &sectionName)
@@ -492,42 +518,45 @@ namespace inicpp
 			return _iniInfoMap[sectionName];
 		}
 
-		inline std::size_t getSectionSize()
+		inline std::size_t getSectionSize() const
 		{
 			return _iniInfoMap.size();
 		}
 
-		std::string getValue(const std::string &sectionName, const std::string &Key)
+		std::string getValue(const std::string &sectionName, const std::string &Key) const
 		{
-			if (!_iniInfoMap.count(sectionName))
+			const section *sec = findSection(sectionName);
+			if (!sec)
 			{
 				return "";
 			}
-			return _iniInfoMap[sectionName][Key];
+			return sec->getValue(Key);
 		}
 
 		// for none section
-		int getLine(const std::string &Key)
+		int getLine(const std::string &Key) const
 		{
-			if (!_iniInfoMap.count(""))
+			const section *sec = findSection("");
+			if (!sec)
 			{
 				return -1;
 			}
-			return _iniInfoMap[""].getLine(Key);
+			return sec->getLine(Key);
 		}
 
 		// for section-key
-		int getLine(const std::string &sectionName, const std::string &Key)
+		int getLine(const std::string &sectionName, const std::string &Key) const
 		{
-			if (!_iniInfoMap.count(sectionName))
+			const section *sec = findSection(sectionName);
+			if (!sec)
 			{
 				return -1;
 			}
-			return _iniInfoMap[sectionName].getLine(Key);
+			return sec->getLine(Key);
 		}
 
 		inline void clear() { _iniInfoMap.clear(); }
-		inline bool empty() { return _iniInfoMap.empty(); }
+		inline bool empty() const { return _iniInfoMap.empty(); }
 
 		parentHelper *parent() override { return _parent; }
 		void setParent(parentHelper *parent) override { _parent = parent; }
@@ -536,6 +565,26 @@ namespace inicpp
 		std::map<std::string /*Section Name*/, section> _iniInfoMap;
 
 	private:
+		section *findSection(const std::string &sectionName)
+		{
+			std::map<std::string, section>::iterator it = _iniInfoMap.find(sectionName);
+			if (it == _iniInfoMap.end())
+			{
+				return nullptr;
+			}
+			return &it->second;
+		}
+
+		const section *findSection(const std::string &sectionName) const
+		{
+			std::map<std::string, section>::const_iterator it = _iniInfoMap.find(sectionName);
+			if (it == _iniInfoMap.end())
+			{
+				return nullptr;
+			}
+			return &it->second;
+		}
+
 		parentHelper *_parent = nullptr;
 	};
 
@@ -897,17 +946,17 @@ namespace inicpp
 			return set("", Key, (*this)[""].toString(Key), comment);
 		}
 
-		bool isSectionExists(const std::string &sectionName)
+		bool isSectionExists(const std::string &sectionName) const
 		{
 			return _iniData.isSectionExists(sectionName);
 		}
 
-		inline std::list<std::string /*section name*/> sectionsList()
+		inline std::list<std::string /*section name*/> sectionsList() const
 		{
 			return _iniData.getSectionsList();
 		}
 
-		inline std::map<std::string /*key*/, std::string /*value*/> sectionMap(const std::string &sectionName)
+		inline std::map<std::string /*key*/, std::string /*value*/> sectionMap(const std::string &sectionName) const
 		{
 			return _iniData.getSectionMap(sectionName);
 		}
