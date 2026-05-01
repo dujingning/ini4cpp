@@ -3,7 +3,6 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <ctime>
 #include <fstream>
 #include <iostream>
 #include <list>
@@ -43,9 +42,12 @@ namespace
 
 	std::string temp_path(const std::string &name)
 	{
-		std::ostringstream oss;
-		oss << "/tmp/inicpp_" << name << "_" << static_cast<long long>(std::time(NULL)) << ".ini";
-		return oss.str();
+		char buffer[L_tmpnam];
+		if (std::tmpnam(buffer) == nullptr)
+		{
+			fail("std::tmpnam failed", __FILE__, __LINE__);
+		}
+		return std::string(buffer) + "_" + name + ".ini";
 	}
 
 	void write_file(const std::string &path, const std::string &content)
@@ -60,6 +62,10 @@ namespace
 	std::string read_file(const std::string &path)
 	{
 		std::ifstream input(path.c_str());
+		if (!input.is_open())
+		{
+			fail(std::string("failed to open file for reading: ") + path, __FILE__, __LINE__);
+		}
 		std::ostringstream buffer;
 		buffer << input.rdbuf();
 		return buffer.str();
