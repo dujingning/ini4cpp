@@ -9,6 +9,7 @@ BINARY_TESTS := \
 	inicpp_file_safety \
 	inicpp_ini_format \
 	inicpp_value_proxy \
+	inicpp_deferred_write \
 	inicpp_write_paths \
 	inicpp_write_failures \
 	inicpp_section_ini_api \
@@ -42,6 +43,9 @@ inicpp_ini_format$(EXEEXT): inicpp_ini_format.cpp ../inicpp.hpp
 
 inicpp_value_proxy$(EXEEXT): inicpp_value_proxy.cpp ../inicpp.hpp
 	$(CXX) $(CXXFLAGS) inicpp_value_proxy.cpp -o $@
+
+inicpp_deferred_write$(EXEEXT): inicpp_deferred_write.cpp ../inicpp.hpp
+	$(CXX) $(CXXFLAGS) inicpp_deferred_write.cpp -o $@
 
 inicpp_write_paths$(EXEEXT): inicpp_write_paths.cpp ../inicpp.hpp
 	$(CXX) $(CXXFLAGS) inicpp_write_paths.cpp -o $@
@@ -79,6 +83,7 @@ test: example_compile $(TEST_BINS)
 	./inicpp_file_safety$(EXEEXT)
 	./inicpp_ini_format$(EXEEXT)
 	./inicpp_value_proxy$(EXEEXT)
+	./inicpp_deferred_write$(EXEEXT)
 	./inicpp_write_paths$(EXEEXT)
 	./inicpp_write_failures$(EXEEXT)
 	./inicpp_section_ini_api$(EXEEXT)

@@ -1,94 +1,100 @@
-### What is this C++ library for?
+### 这个 C++ 库用于什么？
 
-> 🔥 1.Aims to make INI file processing **simple**, **convenient**, and **intuitive**.
+> 1. 让 INI 文件处理保持**简单**、**方便**、**直观**。
 
-> 🔥 2.Advancing the enduring excellence of **C++** through collaborative innovation.
+> 2. 通过协作创新推进 **C++** 的长期价值。
 
-> 🔥 3.Let C++ keep **simple**,**easy** and **free**.
-
----
-
-### Ⅰ、Project
-You can view the project at [https://github.com/dujingning/inicpp.git](https://github.com/dujingning/inicpp.git) or [https://gitee.com/dujingning/inicpp](https://gitee.com/dujingning/inicpp).
-
-#### * To support open source, please give us a star. For any issues, feel free to open an issue. Thank you very much!
-
+> 3. 让 C++ 保持**简单**、**易用**、**自由**。
 
 ---
 
-### Ⅱ、Description
+### Ⅰ、项目
 
-The INI header-only library for Modern C++ supports **reading**, **writing**, and even **commenting**. It is easy to use and simplifies working with INI files.
+项目地址：
 
-- New Feature : [Super Easy Binding to Your Data Structures (For Read)](#7super-easy-binding-to-your-data-structures-read).
+- GitHub: [https://github.com/dujingning/inicpp.git](https://github.com/dujingning/inicpp.git)
+- Gitee: [https://gitee.com/dujingning/inicpp](https://gitee.com/dujingning/inicpp)
 
-#### Supported INI syntax
-
-When reading INI files, inicpp supports these common forms:
-
-- UTF-8 BOM at the beginning of the file.
-- Section headers such as `[server]`, `  [server]`, and `[ server ]`.
-- Key-value lines using `=` or `:`, such as `port=8080` and `host: localhost`.
-- Empty values in existing files and values written with `set(..., "")`, such as `key=`.
-- Full-line comments using `;` or `#`, including lines with leading whitespace.
-- Inline comments after whitespace, such as `key=value ; comment` and `key=value # comment`.
-- Comment markers inside quoted or escaped values are preserved, such as `text="a ; b"` and `path=C:\tmp;cache`.
-- Duplicate keys in the same section, and duplicate section headers, use the last parsed value for the repeated key.
-
-Quoted values are returned as written; inicpp does not automatically remove quotes or unescape values. Write operations preserve the existing LF or CRLF line-ending style, but multiline values, bare keys without `=` or `:`, and full formatting-preserving round trips are not supported.
-
+#### * 如果这个项目对你有帮助，欢迎点一个 star。遇到问题也欢迎提交 issue。
 
 ---
 
-### Ⅲ、Usage 
+### Ⅱ、说明
 
-#### * 0.Simple to use with C++11 or later.
-```
+inicpp 是一个面向 Modern C++ 的 INI 单头文件库，支持**读取**、**写入**和**注释写入**。它使用简单，可以降低 C++ 项目处理 INI 配置文件的成本。
+
+- 新特性：[将配置轻松绑定到业务数据结构（读取）](#7将配置轻松绑定到业务数据结构读取)。
+
+#### 支持的 INI 语法
+
+读取 INI 文件时，inicpp 支持以下常见形式：
+
+- 文件开头的 UTF-8 BOM。
+- section 头，例如 `[server]`、`  [server]`、`[ server ]`。
+- 使用 `=` 或 `:` 的 key-value 行，例如 `port=8080` 和 `host: localhost`。
+- 文件中已有的空值，以及通过 `set(..., "")` 写入的空值，例如 `key=`。
+- 使用 `;` 或 `#` 的整行注释，包括前面带空白字符的注释行。
+- 位于空白字符之后的行内注释，例如 `key=value ; comment` 和 `key=value # comment`。
+- 位于引号或转义值中的注释标记会被保留，例如 `text="a ; b"` 和 `path=C:\tmp;cache`。
+- 同一个 section 中的重复 key，以及重复 section 头，都会使用最后一次解析到的重复 key 值。
+
+带引号的值会按原样返回；inicpp 不会自动去除引号，也不会自动反转义。写入操作会保留已有文件的 LF 或 CRLF 换行风格，但不支持多行值、不带 `=` 或 `:` 的裸 key，也不保证完整保留原始格式进行 round trip。
+
+---
+
+### Ⅲ、用法
+
+#### * 0. 使用 C++11 或更高版本。
+
+```bash
 git clone https://github.com/dujingning/inicpp.git
 ```
 
-Include `inicpp.hpp`, declare the `inicpp::IniManager` class, and you're all set.
+包含 `inicpp.hpp`，声明 `inicpp::IniManager` 对象即可使用。
 
+#### 1. 写入示例
 
-#### 1.write example
-Write: Set directly to the file.
+写入：直接写入文件。
+
 ```cpp
 #include "inicpp.hpp"
 #include <iostream>
 
 int main()
 {
-    inicpp::IniManager _ini("config.ini"); // Load and parse the INI file.
+    inicpp::IniManager _ini("config.ini"); // 加载并解析 INI 文件。
 
     _ini["server"]["ip"] = "192.168.3.35";
     _ini["server"]["port"] = 554;
     std::cout << _ini["server"]["ip"] << ":"<< _ini["server"]["port"] << std::endl;
 
-    // or set any
+    // 或使用 set 写入
     _ini.set("server","ip","127.0.0.1");
     _ini.set("server","port",8080);
     std::cout << _ini["server"]["ip"] << ":"<< _ini["server"]["port"] << std::endl;
 }
 ```
 
-#### 1.1.deferred write example
-By default, `set()` and `operator[]` assignment write to the file immediately. If you need to update many values, disable auto flush, update values in memory, and call `flush()` once.
+#### 1.1 延迟写入示例
+
+默认情况下，`set()` 和 `operator[]` 赋值会立即写入文件。如果需要一次更新多个配置项，可以关闭自动 flush，先把修改保存在内存中，最后调用一次 `flush()` 写入文件。
+
 ```cpp
 #include "inicpp.hpp"
 #include <iostream>
 
 int main()
 {
-    inicpp::IniManager _ini("config.ini"); // Load and parse the INI file.
+    inicpp::IniManager _ini("config.ini"); // 加载并解析 INI 文件。
 
     if (!_ini.setAutoFlush(false))
     {
         return 1;
     }
 
-    _ini.set("server", "ip", "127.0.0.1"); // Memory only.
-    _ini.set("server", "port", 8080);       // Memory only.
-    _ini["server"]["name"] = "main";        // Memory only.
+    _ini.set("server", "ip", "127.0.0.1"); // 只修改内存。
+    _ini.set("server", "port", 8080);       // 只修改内存。
+    _ini["server"]["name"] = "main";        // 只修改内存。
 
     if (_ini.isDirty() && !_ini.flush())
     {
@@ -98,60 +104,63 @@ int main()
 }
 ```
 
-`flush()` writes all pending changes to disk through the same backup-based replacement path as immediate writes. The destructor does not call `flush()`, so callers can handle write failures explicitly. Calling `parse()` discards unflushed changes and reloads the file. Calling `setAutoFlush(true)` while changes are pending first attempts to `flush()` them; it returns `false` if that write fails.
+`flush()` 会通过与立即写入相同的 backup 替换流程，把所有 pending 修改写入磁盘。析构函数不会自动调用 `flush()`，这样调用者可以显式处理写入失败。调用 `parse()` 会丢弃尚未 `flush()` 的修改，并重新加载文件。存在 pending 修改时调用 `setAutoFlush(true)` 会先尝试 `flush()`；如果写入失败，则返回 `false`。
 
+#### 2. 读取示例
 
-#### 2.read example
-Convert: From string to typed values. `operator[]` value conversions, including `std::string`, `bool`, and `get<T>()`, throw `std::runtime_error` when the section/key is missing or conversion fails. Existing empty values are valid and convert to an empty `std::string`; use `toString()`, `toInt()`, and `toDouble()` for non-throwing default-value reads. `bool` conversion treats only `"0"`, `"false"`, and `"no"` as false.
+转换：将字符串转换为目标类型。`operator[]` 的值转换，包括 `std::string`、`bool` 和 `get<T>()`，在 section/key 不存在或类型转换失败时会抛出 `std::runtime_error`。文件中已有的空值是合法值，转换为 `std::string` 时会得到空字符串；如果需要不抛异常的默认值读取，可以使用 `toString()`、`toInt()` 和 `toDouble()`。`bool` 转换只会把 `"0"`、`"false"` 和 `"no"` 视为 false。
+
 ```cpp
 #include "inicpp.hpp"
 #include <iostream>
 
 int main()
 {
-    inicpp::IniManager _ini("config.ini"); // Load and parse the INI file.
+    inicpp::IniManager _ini("config.ini"); // 加载并解析 INI 文件。
 
     int         port = _ini["server"]["port"];
     std::string ip   = _ini["server"]["ip"];
     std::cout << ip << ":"<< port << std::endl;
 
-    // or get any
+    // 或使用 get 获取
     ip   = _ini["server"]["ip"].get<std::string>();
     port = _ini["server"]["port"].get<int>();
     std::cout << ip << ":"<< port << std::endl;
 }
 ```
 
+#### 3. 注释示例
 
-#### 3.comment example
-Comment: Write comments for key-value pairs.
+注释：为 key-value 写入注释。
+
 ```cpp
 #include "inicpp.hpp"
 #include <iostream>
 
 int main()
 {
-    inicpp::IniManager _ini("config.ini"); // Load and parse the INI file.
+    inicpp::IniManager _ini("config.ini"); // 加载并解析 INI 文件。
 
-    // comment section/key
+    // section/key 注释
     _ini.set("math"/*section*/, "PI"/*key*/, "3.1415926535897932"/*key*/, "This is PI in mathematics."/*comment*/);
     _ini.setComment("server"/*section*/, "port"/*key*/, "this is the listen ip for server."/*comment*/);
 }
 ```
 
-Comments written through `set()` or `setComment()` are prefixed with `;` by default. If the comment string already starts with `;` or `#`, that marker is kept.
+通过 `set()` 或 `setComment()` 写入的注释默认会添加 `;` 前缀。如果传入的注释字符串已经以 `;` 或 `#` 开头，则会保留原有标记。
 
+#### 4. `toString()`、`toInt()`、`toDouble()`
 
-#### 4.toString()、toInt()、toDouble()
-Convert: From string to type without throwing. `toString()` returns an empty string for missing keys, while `toInt()` and `toDouble()` return `0` or `0.0` when the key is missing or conversion fails.
+转换：从字符串转换为目标类型，但不抛异常。key 不存在时，`toString()` 返回空字符串，`toInt()` 和 `toDouble()` 分别返回 `0` 或 `0.0`；转换失败时，`toInt()` 和 `toDouble()` 也返回默认值。
+
 ```cpp
 #include "inicpp.hpp"
 #include <iostream>
 
 int main()
 {
-    inicpp::IniManager _ini("config.ini"); // Load and parse the INI file.
-    
+    inicpp::IniManager _ini("config.ini"); // 加载并解析 INI 文件。
+
     _ini.set("server","port","554","this is the listen port for server");
     std::cout << _ini["server"]["port"] << std::endl;
 
@@ -169,21 +178,22 @@ int main()
 }
 ```
 
+#### 5. `isKeyExists()`、`sectionsList()`、`sectionMap()`
 
-#### 5.isKeyExists()、sectionsList()、sectionMap()
-May contain unnamed sections: when keys are at the head of the file.
+支持无名 section：例如 key 位于文件头部时。
+
 ```cpp
 #include "inicpp.hpp"
 #include <iostream>
 #include <iomanip>
 
-// ANSI escape code for green text
+// 绿色文本的 ANSI 转义码
 #define GREEN_TEXT "\033[1;32m"
 #define RESET_COLOR "\033[0m"
 
 int main()
 {
-    inicpp::IniManager _ini("config.ini"); // Load and parse the INI file.
+    inicpp::IniManager _ini("config.ini"); // 加载并解析 INI 文件。
 
     for (auto &sectionName : _ini.sectionsList())
     {
@@ -199,7 +209,8 @@ int main()
 }
 ```
 
-#### 6.std::wstring
+#### 6. `std::wstring`
+
 ```cpp
 #ifndef _ENBABLE_INICPP_STD_WSTRING_
 #define _ENBABLE_INICPP_STD_WSTRING_ // std::wstring support
@@ -212,14 +223,14 @@ int main()
 int main()
 {
     {
-        inicpp::IniManager _ini(L"config.ini"); // Load and parse the INI file.
+        inicpp::IniManager _ini(L"config.ini"); // 加载并解析 INI 文件。
         std::wstring ws = _ini["server"].toWString("info");
         int port = _ini["server"]["port"];
         std::string ip = _ini["server"]["ip"];
 
         std::cout << ip << ":" << port << std::endl;
     }
-    // or
+    // 或者
     {
         inicpp::IniManager _ini;
         _ini.setFileName(L"config.ini");
@@ -233,11 +244,11 @@ int main()
 }
 ```
 
+#### 7. 将配置轻松绑定到业务数据结构（读取）
 
-#### 7.Super Easy Binding to Your Data Structures (Read).
+config.ini:
 
-config.ini :
-```
+```ini
 title=config.ini
 [server]
 isKeepalived=true
@@ -250,7 +261,9 @@ ip=127.0.0.1
 ;Comment: This is pi in mathematics.
 PI=3.141592653589793238462643383279502884
 ```
-config.cpp
+
+config.cpp:
+
 ```cpp
 #include "inicpp.hpp"
 #include <iostream>
@@ -301,13 +314,18 @@ int main()
 }
 ```
 
+#### 8. 如何使用 `example/main.cpp`
 
-#### 8.how to use example/main.cpp
-You can compile it using `example/Makefile` or any other method you prefer.
+可以通过 `example/Makefile` 编译，也可以使用你习惯的其他方式。
 
-If make is not available, use the following command: `g++ -I../ -std=c++11 main.cpp -o iniExample`.
+如果无法使用 make，可以执行：
 
-- Compile `example/main.cpp`
+```bash
+g++ -I../ -std=c++11 main.cpp -o iniExample
+```
+
+- 编译 `example/main.cpp`
+
 ```bash
 jn@jn:~/inicpp/example$ ls
 example  inicpp.hpp  LICENSE  README.md
@@ -318,7 +336,8 @@ jn@jn:~/inicpp/example$ ls
 iniExample  main.cpp  Makefile
 ```
 
-- Run example app `iniExample`
+- 运行示例程序 `iniExample`
+
 ```bash
 jn@jn:~/inicpp/example$ ./iniExample
 
@@ -337,7 +356,8 @@ port       -------> 8080
 jn@jn:~/inicpp/example$
 ```
 
-- Configuration file `config.ini` has been created.
+- 生成的配置文件 `config.ini`
+
 ```bash
 jn@jn:~/inicpp/example$ ls
 config.ini  iniExample  main.cpp  Makefile
@@ -362,6 +382,7 @@ jn@jn:~/inicpp/example$
 ---
 
 ### Ⅳ、Star History
+
 <a href="https://star-history.com/#dujingning/inicpp">
  <picture>
    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=dujingning/inicpp&type=Date&theme=dark" />
@@ -372,6 +393,6 @@ jn@jn:~/inicpp/example$
 
 ---
 
+### Ⅴ、结束
 
-### Ⅴ、End
- The project was created by **DuJingning**.
+本项目由 **DuJingning** 创建。

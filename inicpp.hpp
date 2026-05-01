@@ -38,6 +38,7 @@
 #include <string>
 #include <list>
 #include <map>
+#include <vector>
 
 #if defined(_ENABLE_INICPP_STD_WSTRING_) && !defined(_ENBABLE_INICPP_STD_WSTRING_)
 #define _ENBABLE_INICPP_STD_WSTRING_
@@ -655,6 +656,15 @@ namespace inicpp
 
 	class IniManager : parentHelper
 	{
+	private:
+		struct PendingWrite
+		{
+			std::string Section;
+			std::string Key;
+			std::string Value;
+			std::string Comment;
+		};
+
 	public:
 #ifdef _ENBABLE_INICPP_STD_WSTRING_
 		explicit IniManager(const std::wstring &configFileName = L"")
@@ -691,8 +701,86 @@ namespace inicpp
 			return _iniData[sectionName];
 		}
 
+		bool setAutoFlush(const bool enabled)
+		{
+			if (enabled && !_autoFlush && _dirty)
+			{
+				if (!flush())
+				{
+					return false;
+				}
+			}
+			_autoFlush = enabled;
+			return true;
+		}
+
+		bool isAutoFlushEnabled() const
+		{
+			return _autoFlush;
+		}
+
+		bool isDirty() const
+		{
+			return _dirty;
+		}
+
+		bool flush()
+		{
+			if (!_dirty)
+			{
+				return true;
+			}
+
+			if (!ensureFileExists(_configFileName))
+			{
+				return false;
+			}
+
+			std::string content;
+			if (!readFileContent(_configFileName, content))
+			{
+				return false;
+			}
+
+			ini workingData;
+			int workingLineCount = 1;
+			if (!parseContent(content, workingData, workingLineCount))
+			{
+				return false;
+			}
+
+			for (std::vector<PendingWrite>::const_iterator it = _pendingWrites.begin(); it != _pendingWrites.end(); ++it)
+			{
+				std::string updatedContent;
+				if (!buildUpdatedContentFromText(workingData, content, it->Section, it->Key, it->Value, it->Comment, updatedContent))
+				{
+					return false;
+				}
+
+				content = updatedContent;
+				if (!parseContent(content, workingData, workingLineCount))
+				{
+					return false;
+				}
+			}
+
+			if (!replaceFileWithBackup(_configFileName, content))
+			{
+				return false;
+			}
+
+			_pendingWrites.clear();
+			_dirty = false;
+			parse();
+
+			return true;
+		}
+
 		void parse()
 		{
+			_pendingWrites.clear();
+			_dirty = false;
+
 			if (_configFileName.empty())
 			{
 				return;
@@ -706,56 +794,12 @@ namespace inicpp
 			}
 
 			ini parsed;
-			parsed.setParent(this);
-
-			input.seekg(0, input.beg);
-			std::string data, sectionName;
-			int sectionLine = -1;
-
-			section sectionRecord;
-
-			_SumOfLines = 1;
-			while (std::getline(input, data))
+			int parsedLineCount = 1;
+			if (parseStream(input, parsed, parsedLineCount))
 			{
-				stripUtf8Bom(data, _SumOfLines == 1);
-
-				if (!filterData(data))
-				{
-					++_SumOfLines;
-					continue;
-				}
-
-				if (parseSectionHeader(data, sectionName)) // section
-				{
-					if (!sectionRecord.isEmpty() || sectionRecord.name() != "")
-					{
-						parsed.addSection(sectionRecord);
-					}
-
-					sectionLine = _SumOfLines;
-
-					sectionRecord.clear();
-					sectionRecord.setName(sectionName, sectionLine);
-					++_SumOfLines;
-					continue;
-				}
-
-				std::string key, value;
-				if (parseKeyValueLine(data, key, value))
-				{ // k=v
-					sectionRecord.setValue(key, value, _SumOfLines);
-				}
-
-				++_SumOfLines;
+				_iniData = parsed;
+				_SumOfLines = parsedLineCount;
 			}
-
-			if (!sectionRecord.isEmpty())
-			{
-				sectionRecord.setName(sectionName, -1);
-				parsed.addSection(sectionRecord);
-			}
-
-			_iniData = parsed;
 		}
 
 		bool set(const std::string &Section, const std::string &Key, const std::string &Value, const std::string &comment = "") override
@@ -862,6 +906,14 @@ namespace inicpp
 
 			(void)allowEmptyValue;
 
+			if (!_autoFlush)
+			{
+				setValueInMemory(Section, key, value);
+				_pendingWrites.push_back(makePendingWrite(Section, key, value, comment));
+				_dirty = true;
+				return true;
+			}
+
 			if (!ensureFileExists(_configFileName))
 			{
 				return false;
@@ -886,13 +938,105 @@ namespace inicpp
 			return true;
 		}
 
-		bool buildUpdatedFileContent(const std::string &Section, const std::string &key, const std::string &value, const std::string &comment, std::string &content)
+		PendingWrite makePendingWrite(const std::string &Section, const std::string &Key, const std::string &Value, const std::string &Comment) const
 		{
-			std::ifstream file(_configFileName.c_str(), std::ifstream::in | std::ifstream::binary);
+			PendingWrite pending;
+			pending.Section = Section;
+			pending.Key = Key;
+			pending.Value = Value;
+			pending.Comment = Comment;
+			return pending;
+		}
+
+		section &mutableSection(ini &data, const std::string &sectionName)
+		{
+			section &sec = data._iniInfoMap[sectionName];
+			sec.setParent(data.asParentHelper());
+
+			if (sec.name().empty())
+			{
+				sec.setName(sectionName, -1);
+			}
+
+			return sec;
+		}
+
+		void setValueInMemory(const std::string &Section, const std::string &key, const std::string &value)
+		{
+			section &sec = mutableSection(_iniData, Section);
+			sec.setValue(key, value, sec.getLine(key));
+		}
+
+		bool parseContent(const std::string &content, ini &parsed, int &lineCount)
+		{
+			std::istringstream input(content);
+			return parseStream(input, parsed, lineCount);
+		}
+
+		bool parseStream(std::istream &input, ini &parsed, int &lineCount)
+		{
+			parsed.clear();
+			parsed.setParent(this);
+
+			input.clear();
+			input.seekg(0, input.beg);
+
+			std::string data, sectionName;
+			int sectionLine = -1;
+
+			section sectionRecord;
+
+			lineCount = 1;
+			while (std::getline(input, data))
+			{
+				stripUtf8Bom(data, lineCount == 1);
+
+				if (!filterData(data))
+				{
+					++lineCount;
+					continue;
+				}
+
+				if (parseSectionHeader(data, sectionName)) // section
+				{
+					if (!sectionRecord.isEmpty() || sectionRecord.name() != "")
+					{
+						parsed.addSection(sectionRecord);
+					}
+
+					sectionLine = lineCount;
+
+					sectionRecord.clear();
+					sectionRecord.setName(sectionName, sectionLine);
+					++lineCount;
+					continue;
+				}
+
+				std::string key, value;
+				if (parseKeyValueLine(data, key, value))
+				{ // k=v
+					sectionRecord.setValue(key, value, lineCount);
+				}
+
+				++lineCount;
+			}
+
+			if (!sectionRecord.isEmpty())
+			{
+				sectionRecord.setName(sectionName, -1);
+				parsed.addSection(sectionRecord);
+			}
+
+			return !input.bad();
+		}
+
+		static bool readFileContent(const std::string &fileName, std::string &content)
+		{
+			std::ifstream file(fileName.c_str(), std::ifstream::in | std::ifstream::binary);
 
 			if (!file.is_open())
 			{
-				INICPP_DEBUG_LOG("Failed to open the input INI file for modification! File name:" << _configFileName);
+				INICPP_DEBUG_LOG("Failed to open the input INI file for reading! File name:" << fileName);
 				return false;
 			}
 
@@ -903,7 +1047,23 @@ namespace inicpp
 				return false;
 			}
 
-			const std::string originalContent = fileBuffer.str();
+			content = fileBuffer.str();
+			return true;
+		}
+
+		bool buildUpdatedFileContent(const std::string &Section, const std::string &key, const std::string &value, const std::string &comment, std::string &content)
+		{
+			std::string originalContent;
+			if (!readFileContent(_configFileName, originalContent))
+			{
+				return false;
+			}
+
+			return buildUpdatedContentFromText(_iniData, originalContent, Section, key, value, comment, content);
+		}
+
+		bool buildUpdatedContentFromText(const ini &baseData, const std::string &originalContent, const std::string &Section, const std::string &key, const std::string &value, const std::string &comment, std::string &content)
+		{
 			const std::string lineEnding = detectLineEnding(originalContent);
 			const std::string keyValueData = formatKeyValueData(key, value, comment, lineEnding);
 
@@ -916,13 +1076,14 @@ namespace inicpp
 			do
 			{
 				// exist key at one section replace it, or need to create it
-				if (_iniData.isSectionExists(Section))
+				const section *targetSection = baseData.findSection(Section);
+				if (targetSection)
 				{
-					line_number_mark = (*this)[Section].getLine(key);
+					line_number_mark = targetSection->getLine(key);
 
 					if (line_number_mark == -1)
 					{ // section exist, key not exist
-						line_number_mark = (*this)[Section].getEndSection();
+						line_number_mark = targetSection->getEndSection();
 
 						std::string lineData;
 						int input_line_number = 0;
@@ -958,7 +1119,7 @@ namespace inicpp
 					std::string newLine = lineEnding + lineEnding;
 					if (Section != "" && Section.find("[") == std::string::npos && Section.find("]") == std::string::npos && Section.find("=") == std::string::npos)
 					{
-						if (_iniData.empty() || _iniData.getSectionSize() <= 0)
+						if (baseData.empty() || baseData.getSectionSize() <= 0)
 						{
 							newLine.clear();
 						}
@@ -967,7 +1128,7 @@ namespace inicpp
 					}
 
 					// 1.section is exist or empty section
-					if (_iniData.isSectionExists(Section) || Section == "")
+					if (baseData.isSectionExists(Section) || Section == "")
 					{
 						// write key/value to head
 						if (isHoldSection)
@@ -1356,6 +1517,9 @@ namespace inicpp
 		int _SumOfLines;
 		std::fstream _iniFile;
 		std::string _configFileName;
+		bool _autoFlush = true;
+		bool _dirty = false;
+		std::vector<PendingWrite> _pendingWrites;
 	};
 
 } // namespace inicpp
