@@ -718,7 +718,6 @@ namespace inicpp
 			std::string key = Key, value = Value;
 
 			trimEdges(key);
-			trimEdges(key);
 
 			if (key == "" || value == "")
 			{
@@ -736,19 +735,116 @@ namespace inicpp
 				}
 			}
 
-			const std::string &tempFile = ".temp.ini";
-			std::fstream input(_configFileName, std::ifstream::in);
-			std::ofstream output(tempFile);
+			std::string updatedContent;
+			if (!buildUpdatedFileContent(Section, key, keyValueData, comment, updatedContent))
+			{
+				return false;
+			}
+
+			if (!replaceFileWithBackup(_configFileName, updatedContent))
+			{
+				return false;
+			}
+
+			// reload
+			parse();
+
+			return true;
+		}
+
+		bool set(const std::string &Section, const std::string &Key, const int Value, const std::string &comment = "")
+		{
+			std::string stringValue = std::to_string(Value);
+			return set(Section, Key, stringValue, comment);
+		}
+
+		bool set(const std::string &Section, const std::string &Key, const double &Value, const std::string &comment = "")
+		{
+			std::string stringValue = std::to_string(Value);
+			return set(Section, Key, stringValue, comment);
+		}
+
+		bool set(const std::string &Section, const std::string &Key, const char &Value, const std::string &comment = "")
+		{
+			std::string stringValue = ValueProxy::to_string(Value);
+			return set(Section, Key, stringValue, comment);
+		}
+
+		// no sections: head of config file
+		bool set(const std::string &Key, const std::string &Value)
+		{
+			return set("", Key, Value, "");
+		}
+		bool set(const std::string &Key, const char *Value)
+		{
+			return set("", Key, Value, "");
+		}
+		template <typename T>
+		bool set(const std::string &Key, const T &Value)
+		{
+			std::string stringValue = std::to_string(Value);
+			return set("", Key, stringValue, "");
+		}
+
+#ifdef _ENBABLE_INICPP_STD_WSTRING_
+		bool set(const std::string &Section, const std::string &Key, const std::wstring &Value, const std::string &comment = "")
+		{
+			std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+			std::string stringValue = converter.to_bytes(Value);
+
+			return set(Section, Key, stringValue, comment);
+		}
+#endif
+		// comment for section name of key
+		bool setComment(const std::string &Section, const std::string &Key, const std::string &comment)
+		{
+			return set(Section, Key, (*this)[Section].toString(Key), comment);
+		}
+		// comment for no section name of key
+		bool setComment(const std::string &Key, const std::string &comment)
+		{
+			return set("", Key, (*this)[""].toString(Key), comment);
+		}
+
+		bool isSectionExists(const std::string &sectionName) const
+		{
+			return _iniData.isSectionExists(sectionName);
+		}
+
+		inline std::list<std::string /*section name*/> sectionsList() const
+		{
+			return _iniData.getSectionsList();
+		}
+
+		inline std::map<std::string /*key*/, std::string /*value*/> sectionMap(const std::string &sectionName) const
+		{
+			return _iniData.getSectionMap(sectionName);
+		}
+
+#ifdef _ENBABLE_INICPP_STD_WSTRING_
+		void setFileName(const std::wstring &fileName)
+		{
+                        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+                        std::string name = converter.to_bytes(fileName);
+
+			_configFileName = name;
+		}
+#else
+		void setFileName(const std::string &fileName)
+		{
+			_configFileName = fileName;
+		}
+#endif
+
+	private:
+		bool buildUpdatedFileContent(const std::string &Section, const std::string &key, const std::string &keyValueData, const std::string &comment, std::string &content)
+		{
+			std::fstream input(_configFileName.c_str(), std::ifstream::in);
+			std::ostringstream output;
 
 			if (!input.is_open())
 			{
 				INI_DEBUG("Failed to open the input INI file for modification! File name:" << _configFileName);
-				return false;
-			}
-
-			if (!output.is_open())
-			{
-				INI_DEBUG("Failed to open the output INI file for modification!");
 				return false;
 			}
 
@@ -875,104 +971,78 @@ namespace inicpp
 
 			} while (false);
 
-			// clear work
-			input.close();
-			output.close();
+			if (input.bad() || !output)
+			{
+				return false;
+			}
 
-			std::remove(_configFileName.c_str());
-			std::rename(tempFile.c_str(), _configFileName.c_str());
+			content = output.str();
+			return true;
+		}
 
-			// reload
-			parse();
+		static bool replaceFileWithBackup(const std::string &fileName, const std::string &content)
+		{
+			if (fileName.empty())
+			{
+				return false;
+			}
+
+			const std::string tempFile = fileName + ".inicpp.tmp";
+			const std::string backupFile = fileName + ".inicpp.bak";
+
+			{
+				std::ofstream output(tempFile.c_str(), std::ofstream::out | std::ofstream::trunc);
+				if (!output.is_open())
+				{
+					return false;
+				}
+
+				output << content;
+				output.close();
+				if (!output)
+				{
+					std::remove(tempFile.c_str());
+					return false;
+				}
+			}
+
+			{
+				std::ifstream backupInput(backupFile.c_str());
+				if (backupInput.good())
+				{
+					backupInput.close();
+					if (std::remove(backupFile.c_str()) != 0)
+					{
+						std::remove(tempFile.c_str());
+						return false;
+					}
+				}
+			}
+
+			if (std::rename(fileName.c_str(), backupFile.c_str()) != 0)
+			{
+				std::remove(tempFile.c_str());
+				return false;
+			}
+
+			if (std::rename(tempFile.c_str(), fileName.c_str()) != 0)
+			{
+				if (std::rename(backupFile.c_str(), fileName.c_str()) != 0)
+				{
+					INI_DEBUG("Failed to restore original INI file from backup! File name:" << fileName);
+				}
+				std::remove(tempFile.c_str());
+				return false;
+			}
+
+			if (std::remove(backupFile.c_str()) != 0)
+			{
+				return false;
+			}
 
 			return true;
 		}
 
-		bool set(const std::string &Section, const std::string &Key, const int Value, const std::string &comment = "")
-		{
-			std::string stringValue = std::to_string(Value);
-			return set(Section, Key, stringValue, comment);
-		}
-
-		bool set(const std::string &Section, const std::string &Key, const double &Value, const std::string &comment = "")
-		{
-			std::string stringValue = std::to_string(Value);
-			return set(Section, Key, stringValue, comment);
-		}
-
-		bool set(const std::string &Section, const std::string &Key, const char &Value, const std::string &comment = "")
-		{
-			std::string stringValue = ValueProxy::to_string(Value);
-			return set(Section, Key, stringValue, comment);
-		}
-
-		// no sections: head of config file
-		bool set(const std::string &Key, const std::string &Value)
-		{
-			return set("", Key, Value, "");
-		}
-		bool set(const std::string &Key, const char *Value)
-		{
-			return set("", Key, Value, "");
-		}
-		template <typename T>
-		bool set(const std::string &Key, const T &Value)
-		{
-			std::string stringValue = std::to_string(Value);
-			return set("", Key, stringValue, "");
-		}
-
-#ifdef _ENBABLE_INICPP_STD_WSTRING_
-		bool set(const std::string &Section, const std::string &Key, const std::wstring &Value, const std::string &comment = "")
-		{
-			std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-			std::string stringValue = converter.to_bytes(Value);
-
-			return set(Section, Key, stringValue, comment);
-		}
-#endif
-		// comment for section name of key
-		bool setComment(const std::string &Section, const std::string &Key, const std::string &comment)
-		{
-			return set(Section, Key, (*this)[Section].toString(Key), comment);
-		}
-		// comment for no section name of key
-		bool setComment(const std::string &Key, const std::string &comment)
-		{
-			return set("", Key, (*this)[""].toString(Key), comment);
-		}
-
-		bool isSectionExists(const std::string &sectionName) const
-		{
-			return _iniData.isSectionExists(sectionName);
-		}
-
-		inline std::list<std::string /*section name*/> sectionsList() const
-		{
-			return _iniData.getSectionsList();
-		}
-
-		inline std::map<std::string /*key*/, std::string /*value*/> sectionMap(const std::string &sectionName) const
-		{
-			return _iniData.getSectionMap(sectionName);
-		}
-
-#ifdef _ENBABLE_INICPP_STD_WSTRING_
-		void setFileName(const std::wstring &fileName)
-		{
-                        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-                        std::string name = converter.to_bytes(fileName);
-
-			_configFileName = name;
-		}
-#else
-		void setFileName(const std::string &fileName)
-		{
-			_configFileName = fileName;
-		}
-#endif
-
-	private:
 		bool filterData(std::string &data)
 		{
 			if (data.length() == 0)
