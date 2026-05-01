@@ -25,8 +25,11 @@
 #ifndef __JN_INICPP_H__
 #define __JN_INICPP_H__
 
+#include <cctype>
 #include <cstddef>
+#include <cstdio>
 #include <stdexcept>
+#include <type_traits>
 
 #include <fstream>
 #include <sstream>
@@ -35,6 +38,10 @@
 #include <string>
 #include <list>
 #include <map>
+
+#if defined(_ENABLE_INICPP_STD_WSTRING_) && !defined(_ENBABLE_INICPP_STD_WSTRING_)
+#define _ENBABLE_INICPP_STD_WSTRING_
+#endif
 
 #ifdef _ENBABLE_INICPP_STD_WSTRING_ // Not all of C++ 11 support <codecvt>
 // for std::string <==> std::wstring convert
@@ -80,6 +87,8 @@ namespace inicpp
 	class parentHelper
 	{
 	public:
+		virtual ~parentHelper() {}
+
 		virtual parentHelper *parent()
 		{
 			INI_DEBUG("called parentHelper virtual impl: need to impl parent");
@@ -87,10 +96,15 @@ namespace inicpp
 		}
 		virtual void setParent(parentHelper *parent)
 		{
+			(void)parent;
 			INI_DEBUG("called parentHelper virtual impl: need to impl setParent");
 		}
 		virtual bool set(const std::string &Section, const std::string &Key, const std::string &Value, const std::string &comment = "")
 		{
+			(void)Section;
+			(void)Key;
+			(void)Value;
+			(void)comment;
 			INI_DEBUG("called parentHelper virtual impl: need to impl set");
 			return true;
 		}
@@ -189,7 +203,7 @@ namespace inicpp
 		}
 
 		// specify std::string
-		const std::string &String() noexcept
+		const std::string &String() const noexcept
 		{
 			return _value;
 		}
@@ -236,18 +250,19 @@ namespace inicpp
 		{
 		}
 
-		const std::string &name()
+		const std::string &name() const
 		{
 			return _sectionName;
 		}
 
-		const std::string getValue(const std::string &Key)
+		const std::string getValue(const std::string &Key) const
 		{
-			if (!_sectionMap.count(Key))
+			const ValueNode *node = findValue(Key);
+			if (!node)
 			{
 				return "";
 			}
-			return _sectionMap[Key].Value;
+			return node->Value;
 		}
 
 		void setName(const std::string &name, const int &lineNumber)
@@ -262,17 +277,17 @@ namespace inicpp
 			_sectionMap[Key].lineNumber = line;
 		}
 
-		void append(section &sec)
+		void append(const section &sec)
 		{
 			_sectionMap.insert(sec._sectionMap.begin(), sec._sectionMap.end());
 		}
 
-		bool isKeyExist(const std::string &Key)
+		bool isKeyExist(const std::string &Key) const
 		{
-			return !_sectionMap.count(Key) ? false : true;
+			return findValue(Key) != nullptr;
 		}
 
-		int getEndSection()
+		int getEndSection() const
 		{
 			int line = -1;
 
@@ -291,13 +306,14 @@ namespace inicpp
 			return line;
 		}
 
-		int getLine(const std::string &Key)
+		int getLine(const std::string &Key) const
 		{
-			if (!_sectionMap.count(Key))
+			const ValueNode *node = findValue(Key);
+			if (!node)
 			{
 				return -1;
 			}
-			return _sectionMap[Key].lineNumber;
+			return node->lineNumber;
 		}
 
 		void clear()
@@ -312,78 +328,49 @@ namespace inicpp
 			return _sectionMap.empty();
 		}
 
-		int toInt(const std::string &Key) noexcept
+		int toInt(const std::string &Key) const noexcept
 		{
-			if (!_sectionMap.count(Key))
+			const ValueNode *node = findValue(Key);
+			if (!node)
 			{
 				return 0;
 			}
-
-			int result = 0;
-
-			try
-			{
-				result = std::stoi(_sectionMap[Key].Value);
-			}
-			catch (const std::invalid_argument &e)
-			{
-				INI_DEBUG("Invalid argument: " << e.what() << ",input:\'" << _sectionMap[Key].Value << "\'");
-			}
-			catch (const std::out_of_range &e)
-			{
-				INI_DEBUG("Out of range: " << e.what() << ",input:\'" << _sectionMap[Key].Value << "\'");
-			}
-
-			return result;
+			return toIntOrDefault(node->Value);
 		}
 
-		std::string toString(const std::string &Key) noexcept
+		std::string toString(const std::string &Key) const noexcept
 		{
-			if (!_sectionMap.count(Key))
+			const ValueNode *node = findValue(Key);
+			if (!node)
 			{
 				return "";
 			}
-			return _sectionMap[Key].Value;
+			return node->Value;
 		}
 
 #ifdef _ENBABLE_INICPP_STD_WSTRING_
-		std::wstring toWString(const std::string &Key)
+		std::wstring toWString(const std::string &Key) const
 		{
 			std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 			return converter.from_bytes(toString(Key));
 		}
 #endif
 
-		double toDouble(const std::string &Key) noexcept
+		double toDouble(const std::string &Key) const noexcept
 		{
-			if (!_sectionMap.count(Key))
+			const ValueNode *node = findValue(Key);
+			if (!node)
 			{
 				return 0.0;
 			}
-
-			double result = 0.0;
-
-			try
-			{
-				result = std::stod(_sectionMap[Key].Value);
-			}
-			catch (const std::invalid_argument &e)
-			{
-				INI_DEBUG("Invalid argument: " << e.what() << ",input:\'" << _sectionMap[Key].Value << "\'");
-			}
-			catch (const std::out_of_range &e)
-			{
-				INI_DEBUG("Out of range: " << e.what() << ",input:\'" << _sectionMap[Key].Value << "\'");
-			}
-
-			return result;
+			return toDoubleOrDefault(node->Value);
 		}
 
-		std::map<std::string /*Key*/, std::string /*Value*/> getSectionMap()
+		std::map<std::string /*Key*/, std::string /*Value*/> getSectionMap() const
 		{
 			std::map<std::string /*Key*/, std::string /*Value*/> sectionKVMap;
 
-			for (auto &iter : _sectionMap)
+			for (const auto &iter : _sectionMap)
 			{
 				sectionKVMap[iter.first] = iter.second.Value;
 			}
@@ -405,6 +392,62 @@ namespace inicpp
 		inline void setParent(parentHelper *parent) override { _parent = parent; };
 
 	private:
+		ValueNode *findValue(const std::string &Key)
+		{
+			std::map<std::string, ValueNode>::iterator it = _sectionMap.find(Key);
+			if (it == _sectionMap.end())
+			{
+				return nullptr;
+			}
+			return &it->second;
+		}
+
+		const ValueNode *findValue(const std::string &Key) const
+		{
+			std::map<std::string, ValueNode>::const_iterator it = _sectionMap.find(Key);
+			if (it == _sectionMap.end())
+			{
+				return nullptr;
+			}
+			return &it->second;
+		}
+
+		static int toIntOrDefault(const std::string &value) noexcept
+		{
+			int result = 0;
+			try
+			{
+				result = std::stoi(value);
+			}
+			catch (const std::invalid_argument &e)
+			{
+				INI_DEBUG("Invalid argument: " << e.what() << ",input:'" << value << "'");
+			}
+			catch (const std::out_of_range &e)
+			{
+				INI_DEBUG("Out of range: " << e.what() << ",input:'" << value << "'");
+			}
+			return result;
+		}
+
+		static double toDoubleOrDefault(const std::string &value) noexcept
+		{
+			double result = 0.0;
+			try
+			{
+				result = std::stod(value);
+			}
+			catch (const std::invalid_argument &e)
+			{
+				INI_DEBUG("Invalid argument: " << e.what() << ",input:'" << value << "'");
+			}
+			catch (const std::out_of_range &e)
+			{
+				INI_DEBUG("Out of range: " << e.what() << ",input:'" << value << "'");
+			}
+			return result;
+		}
+
 		std::string _sectionName;
 		std::map<std::string /*Key*/, ValueNode> _sectionMap;
 		int _lineNumber = -1; // text line start with 1
@@ -436,13 +479,13 @@ namespace inicpp
 			return;
 		}
 
-		bool isSectionExists(const std::string &sectionName)
+		bool isSectionExists(const std::string &sectionName) const
 		{
-			return !_iniInfoMap.count(sectionName) ? false : true;
+			return findSection(sectionName) != nullptr;
 		}
 
 		// may contains default of Unnamed section with ""
-		std::list<std::string> getSectionsList()
+		std::list<std::string> getSectionsList() const
 		{
 			std::list<std::string> sectionList;
 			for (const auto &data : _iniInfoMap)
@@ -456,14 +499,15 @@ namespace inicpp
 			return sectionList;
 		}
 
-		std::map<std::string /*key*/, std::string /*value*/> getSectionMap(const std::string &sectionName)
+		std::map<std::string /*key*/, std::string /*value*/> getSectionMap(const std::string &sectionName) const
 		{
 			std::map<std::string /*key*/, std::string /*value*/> kvMap;
-			if (_iniInfoMap.count(sectionName) == 0)
+			const section *sec = findSection(sectionName);
+			if (!sec)
 			{
 				return kvMap;
 			}
-			return _iniInfoMap[sectionName].getSectionMap();
+			return sec->getSectionMap();
 		}
 
 		const section &operator[](const std::string &sectionName)
@@ -478,42 +522,45 @@ namespace inicpp
 			return _iniInfoMap[sectionName];
 		}
 
-		inline std::size_t getSectionSize()
+		inline std::size_t getSectionSize() const
 		{
 			return _iniInfoMap.size();
 		}
 
-		std::string getValue(const std::string &sectionName, const std::string &Key)
+		std::string getValue(const std::string &sectionName, const std::string &Key) const
 		{
-			if (!_iniInfoMap.count(sectionName))
+			const section *sec = findSection(sectionName);
+			if (!sec)
 			{
 				return "";
 			}
-			return _iniInfoMap[sectionName][Key];
+			return sec->getValue(Key);
 		}
 
 		// for none section
-		int getLine(const std::string &Key)
+		int getLine(const std::string &Key) const
 		{
-			if (!_iniInfoMap.count(""))
+			const section *sec = findSection("");
+			if (!sec)
 			{
 				return -1;
 			}
-			return _iniInfoMap[""].getLine(Key);
+			return sec->getLine(Key);
 		}
 
 		// for section-key
-		int getLine(const std::string &sectionName, const std::string &Key)
+		int getLine(const std::string &sectionName, const std::string &Key) const
 		{
-			if (!_iniInfoMap.count(sectionName))
+			const section *sec = findSection(sectionName);
+			if (!sec)
 			{
 				return -1;
 			}
-			return _iniInfoMap[sectionName].getLine(Key);
+			return sec->getLine(Key);
 		}
 
 		inline void clear() { _iniInfoMap.clear(); }
-		inline bool empty() { return _iniInfoMap.empty(); }
+		inline bool empty() const { return _iniInfoMap.empty(); }
 
 		parentHelper *parent() override { return _parent; }
 		void setParent(parentHelper *parent) override { _parent = parent; }
@@ -522,6 +569,26 @@ namespace inicpp
 		std::map<std::string /*Section Name*/, section> _iniInfoMap;
 
 	private:
+		section *findSection(const std::string &sectionName)
+		{
+			std::map<std::string, section>::iterator it = _iniInfoMap.find(sectionName);
+			if (it == _iniInfoMap.end())
+			{
+				return nullptr;
+			}
+			return &it->second;
+		}
+
+		const section *findSection(const std::string &sectionName) const
+		{
+			std::map<std::string, section>::const_iterator it = _iniInfoMap.find(sectionName);
+			if (it == _iniInfoMap.end())
+			{
+				return nullptr;
+			}
+			return &it->second;
+		}
+
 		parentHelper *_parent = nullptr;
 	};
 
@@ -563,38 +630,34 @@ namespace inicpp
 				return;
 			}
 
-			if (!_iniFile.is_open())
-			{
-				_iniFile.clear();
-				_iniFile.open(_configFileName, std::ifstream::in | std::ifstream::out | std::fstream::app);
-			}
+			std::fstream input;
+			input.open(_configFileName.c_str(), std::ifstream::in | std::ifstream::out | std::fstream::app);
 
-			if (!_iniFile.is_open())
+			if (!input.is_open())
 			{
 				INI_DEBUG("Failed to open(WR),try to open with readonly(R).");
-				_iniFile.clear();
-				_iniFile.open(_configFileName, std::ifstream::in);
+				input.clear();
+				input.open(_configFileName.c_str(), std::ifstream::in);
 			}
 
-			if (!_iniFile.is_open())
+			if (!input.is_open())
 			{
 				INI_DEBUG("Failed to open the input INI file for parsing! file:" << _configFileName);
 				return;
 			}
 
-			_iniData.clear();
+			ini parsed;
+			parsed.setParent(this);
 
-			_iniFile.seekg(0, _iniFile.beg);
+			input.seekg(0, input.beg);
 			std::string data, sectionName;
 			int sectionLine = -1;
 
 			section sectionRecord;
 
 			_SumOfLines = 1;
-			do
+			while (std::getline(input, data))
 			{
-				std::getline(_iniFile, data);
-
 				if (!filterData(data))
 				{
 					++_SumOfLines;
@@ -605,7 +668,7 @@ namespace inicpp
 				{
 					if (!sectionRecord.isEmpty() || sectionRecord.name() != "")
 					{
-						_iniData.addSection(sectionRecord);
+						parsed.addSection(sectionRecord);
 					}
 
 					size_t first = data.find('[');
@@ -637,19 +700,15 @@ namespace inicpp
 				}
 
 				++_SumOfLines;
-
-			} while (!_iniFile.eof());
+			}
 
 			if (!sectionRecord.isEmpty())
 			{
 				sectionRecord.setName(sectionName, -1);
-				_iniData.addSection(sectionRecord);
+				parsed.addSection(sectionRecord);
 			}
 
-			if (_iniFile.is_open())
-			{
-				_iniFile.close();
-			}
+			_iniData = parsed;
 		}
 
 		bool set(const std::string &Section, const std::string &Key, const std::string &Value, const std::string &comment = "") override
@@ -658,7 +717,6 @@ namespace inicpp
 
 			std::string key = Key, value = Value;
 
-			trimEdges(key);
 			trimEdges(key);
 
 			if (key == "" || value == "")
@@ -677,19 +735,116 @@ namespace inicpp
 				}
 			}
 
-			const std::string &tempFile = ".temp.ini";
-			std::fstream input(_configFileName, std::ifstream::in);
-			std::ofstream output(tempFile);
+			std::string updatedContent;
+			if (!buildUpdatedFileContent(Section, key, keyValueData, comment, updatedContent))
+			{
+				return false;
+			}
+
+			if (!replaceFileWithBackup(_configFileName, updatedContent))
+			{
+				return false;
+			}
+
+			// reload
+			parse();
+
+			return true;
+		}
+
+		bool set(const std::string &Section, const std::string &Key, const int Value, const std::string &comment = "")
+		{
+			std::string stringValue = std::to_string(Value);
+			return set(Section, Key, stringValue, comment);
+		}
+
+		bool set(const std::string &Section, const std::string &Key, const double &Value, const std::string &comment = "")
+		{
+			std::string stringValue = std::to_string(Value);
+			return set(Section, Key, stringValue, comment);
+		}
+
+		bool set(const std::string &Section, const std::string &Key, const char &Value, const std::string &comment = "")
+		{
+			std::string stringValue = ValueProxy::to_string(Value);
+			return set(Section, Key, stringValue, comment);
+		}
+
+		// no sections: head of config file
+		bool set(const std::string &Key, const std::string &Value)
+		{
+			return set("", Key, Value, "");
+		}
+		bool set(const std::string &Key, const char *Value)
+		{
+			return set("", Key, Value, "");
+		}
+		template <typename T>
+		bool set(const std::string &Key, const T &Value)
+		{
+			std::string stringValue = std::to_string(Value);
+			return set("", Key, stringValue, "");
+		}
+
+#ifdef _ENBABLE_INICPP_STD_WSTRING_
+		bool set(const std::string &Section, const std::string &Key, const std::wstring &Value, const std::string &comment = "")
+		{
+			std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+			std::string stringValue = converter.to_bytes(Value);
+
+			return set(Section, Key, stringValue, comment);
+		}
+#endif
+		// comment for section name of key
+		bool setComment(const std::string &Section, const std::string &Key, const std::string &comment)
+		{
+			return set(Section, Key, (*this)[Section].toString(Key), comment);
+		}
+		// comment for no section name of key
+		bool setComment(const std::string &Key, const std::string &comment)
+		{
+			return set("", Key, (*this)[""].toString(Key), comment);
+		}
+
+		bool isSectionExists(const std::string &sectionName) const
+		{
+			return _iniData.isSectionExists(sectionName);
+		}
+
+		inline std::list<std::string /*section name*/> sectionsList() const
+		{
+			return _iniData.getSectionsList();
+		}
+
+		inline std::map<std::string /*key*/, std::string /*value*/> sectionMap(const std::string &sectionName) const
+		{
+			return _iniData.getSectionMap(sectionName);
+		}
+
+#ifdef _ENBABLE_INICPP_STD_WSTRING_
+		void setFileName(const std::wstring &fileName)
+		{
+                        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+                        std::string name = converter.to_bytes(fileName);
+
+			_configFileName = name;
+		}
+#else
+		void setFileName(const std::string &fileName)
+		{
+			_configFileName = fileName;
+		}
+#endif
+
+	private:
+		bool buildUpdatedFileContent(const std::string &Section, const std::string &key, const std::string &keyValueData, const std::string &comment, std::string &content)
+		{
+			std::ifstream input(_configFileName.c_str(), std::ifstream::in);
+			std::ostringstream output;
 
 			if (!input.is_open())
 			{
 				INI_DEBUG("Failed to open the input INI file for modification! File name:" << _configFileName);
-				return false;
-			}
-
-			if (!output.is_open())
-			{
-				INI_DEBUG("Failed to open the output INI file for modification!");
 				return false;
 			}
 
@@ -816,104 +971,78 @@ namespace inicpp
 
 			} while (false);
 
-			// clear work
-			input.close();
-			output.close();
+			if (input.bad() || !output)
+			{
+				return false;
+			}
 
-			std::remove(_configFileName.c_str());
-			std::rename(tempFile.c_str(), _configFileName.c_str());
+			content = output.str();
+			return true;
+		}
 
-			// reload
-			parse();
+		static bool replaceFileWithBackup(const std::string &fileName, const std::string &content)
+		{
+			if (fileName.empty())
+			{
+				return false;
+			}
+
+			const std::string tempFile = fileName + ".inicpp.tmp";
+			const std::string backupFile = fileName + ".inicpp.bak";
+
+			{
+				std::ofstream output(tempFile.c_str(), std::ofstream::out | std::ofstream::trunc);
+				if (!output.is_open())
+				{
+					return false;
+				}
+
+				output << content;
+				output.close();
+				if (!output)
+				{
+					std::remove(tempFile.c_str());
+					return false;
+				}
+			}
+
+			{
+				std::ifstream backupInput(backupFile.c_str());
+				if (backupInput.good())
+				{
+					backupInput.close();
+					if (std::remove(backupFile.c_str()) != 0)
+					{
+						std::remove(tempFile.c_str());
+						return false;
+					}
+				}
+			}
+
+			if (std::rename(fileName.c_str(), backupFile.c_str()) != 0)
+			{
+				std::remove(tempFile.c_str());
+				return false;
+			}
+
+			if (std::rename(tempFile.c_str(), fileName.c_str()) != 0)
+			{
+				if (std::rename(backupFile.c_str(), fileName.c_str()) != 0)
+				{
+					INI_DEBUG("Failed to restore original INI file from backup! File name:" << fileName);
+				}
+				std::remove(tempFile.c_str());
+				return false;
+			}
+
+			if (std::remove(backupFile.c_str()) != 0)
+			{
+				INI_DEBUG("Failed to remove backup file: " << backupFile);
+			}
 
 			return true;
 		}
 
-		bool set(const std::string &Section, const std::string &Key, const int Value, const std::string &comment = "")
-		{
-			std::string stringValue = std::to_string(Value);
-			return set(Section, Key, stringValue, comment);
-		}
-
-		bool set(const std::string &Section, const std::string &Key, const double &Value, const std::string &comment = "")
-		{
-			std::string stringValue = std::to_string(Value);
-			return set(Section, Key, stringValue, comment);
-		}
-
-		bool set(const std::string &Section, const std::string &Key, const char &Value, const std::string &comment = "")
-		{
-			std::string stringValue = ValueProxy::to_string(Value);
-			return set(Section, Key, stringValue, comment);
-		}
-
-		// no sections: head of config file
-		bool set(const std::string &Key, const std::string &Value)
-		{
-			return set("", Key, Value, "");
-		}
-		bool set(const std::string &Key, const char *Value)
-		{
-			return set("", Key, Value, "");
-		}
-		template <typename T>
-		bool set(const std::string &Key, const T &Value)
-		{
-			std::string stringValue = std::to_string(Value);
-			return set("", Key, stringValue, "");
-		}
-
-#ifdef _ENBABLE_INICPP_STD_WSTRING_
-		bool set(const std::string &Section, const std::string &Key, const std::wstring &Value, const std::string &comment = "")
-		{
-			std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-			std::string stringValue = converter.to_bytes(Value);
-
-			return set(Section, Key, stringValue, comment);
-		}
-#endif
-		// comment for section name of key
-		bool setComment(const std::string &Section, const std::string &Key, const std::string &comment)
-		{
-			return set(Section, Key, (*this)[Section].toString(Key), comment);
-		}
-		// comment for no section name of key
-		bool setComment(const std::string &Key, const std::string &comment)
-		{
-			return set("", Key, (*this)[""].toString(Key), comment);
-		}
-
-		bool isSectionExists(const std::string &sectionName)
-		{
-			return _iniData.isSectionExists(sectionName);
-		}
-
-		inline std::list<std::string /*section name*/> sectionsList()
-		{
-			return _iniData.getSectionsList();
-		}
-
-		inline std::map<std::string /*key*/, std::string /*value*/> sectionMap(const std::string &sectionName)
-		{
-			return _iniData.getSectionMap(sectionName);
-		}
-
-#ifdef _ENBABLE_INICPP_STD_WSTRING_
-		void setFileName(const std::wstring &fileName)
-		{
-                        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-                        std::string name = converter.to_bytes(fileName);
-
-			_configFileName = name;
-		}
-#else
-		void setFileName(const std::string &fileName)
-		{
-			_configFileName = fileName;
-		}
-#endif
-
-	private:
 		bool filterData(std::string &data)
 		{
 			if (data.length() == 0)
