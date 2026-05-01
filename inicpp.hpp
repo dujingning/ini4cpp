@@ -335,23 +335,7 @@ namespace inicpp
 			{
 				return 0;
 			}
-
-			int result = 0;
-
-			try
-			{
-				result = std::stoi(node->Value);
-			}
-			catch (const std::invalid_argument &e)
-			{
-				INI_DEBUG("Invalid argument: " << e.what() << ",input:\'" << node->Value << "\'");
-			}
-			catch (const std::out_of_range &e)
-			{
-				INI_DEBUG("Out of range: " << e.what() << ",input:\'" << node->Value << "\'");
-			}
-
-			return result;
+			return toIntOrDefault(node->Value);
 		}
 
 		std::string toString(const std::string &Key) const noexcept
@@ -379,23 +363,7 @@ namespace inicpp
 			{
 				return 0.0;
 			}
-
-			double result = 0.0;
-
-			try
-			{
-				result = std::stod(node->Value);
-			}
-			catch (const std::invalid_argument &e)
-			{
-				INI_DEBUG("Invalid argument: " << e.what() << ",input:\'" << node->Value << "\'");
-			}
-			catch (const std::out_of_range &e)
-			{
-				INI_DEBUG("Out of range: " << e.what() << ",input:\'" << node->Value << "\'");
-			}
-
-			return result;
+			return toDoubleOrDefault(node->Value);
 		}
 
 		std::map<std::string /*Key*/, std::string /*Value*/> getSectionMap() const
@@ -442,6 +410,42 @@ namespace inicpp
 				return nullptr;
 			}
 			return &it->second;
+		}
+
+		static int toIntOrDefault(const std::string &value) noexcept
+		{
+			int result = 0;
+			try
+			{
+				result = std::stoi(value);
+			}
+			catch (const std::invalid_argument &e)
+			{
+				INI_DEBUG("Invalid argument: " << e.what() << ",input:'" << value << "'");
+			}
+			catch (const std::out_of_range &e)
+			{
+				INI_DEBUG("Out of range: " << e.what() << ",input:'" << value << "'");
+			}
+			return result;
+		}
+
+		static double toDoubleOrDefault(const std::string &value) noexcept
+		{
+			double result = 0.0;
+			try
+			{
+				result = std::stod(value);
+			}
+			catch (const std::invalid_argument &e)
+			{
+				INI_DEBUG("Invalid argument: " << e.what() << ",input:'" << value << "'");
+			}
+			catch (const std::out_of_range &e)
+			{
+				INI_DEBUG("Out of range: " << e.what() << ",input:'" << value << "'");
+			}
+			return result;
 		}
 
 		std::string _sectionName;
