@@ -7,6 +7,7 @@
 #include <iostream>
 #include <list>
 #include <map>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -42,12 +43,24 @@ namespace
 
 	std::string temp_path(const std::string &name)
 	{
-		char buffer[L_tmpnam];
-		if (std::tmpnam(buffer) == nullptr)
+		static std::random_device random;
+		static unsigned long counter = 0;
+
+		for (int attempt = 0; attempt < 16; ++attempt)
 		{
-			fail("std::tmpnam failed", __FILE__, __LINE__);
+			std::ostringstream oss;
+			oss << "inicpp_" << name << "_" << random() << "_" << random() << "_" << counter++ << ".ini";
+			const std::string path = oss.str();
+
+			std::ifstream existing(path.c_str());
+			if (!existing.good())
+			{
+				return path;
+			}
 		}
-		return std::string(buffer) + "_" + name + ".ini";
+
+		fail(std::string("failed to create unique temp path for: ") + name, __FILE__, __LINE__);
+		return "";
 	}
 
 	void write_file(const std::string &path, const std::string &content)
