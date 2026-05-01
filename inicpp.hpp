@@ -22,8 +22,8 @@
  * SOFTWARE.
  */
 
-#ifndef __JN_INICPP_H__
-#define __JN_INICPP_H__
+#ifndef INICPP_HPP
+#define INICPP_HPP
 
 #include <cctype>
 #include <cstddef>
@@ -55,6 +55,11 @@
 #include <ctime>
 #include <iostream>
 
+namespace inicpp
+{
+namespace debug
+{
+
 class TimeFormatter
 {
 public:
@@ -68,11 +73,14 @@ public:
 	}
 };
 
-#define CODE_INFO std::string(" \t``````|") + std::string(__FILE__) + ":" + std::to_string(__LINE__) + "  fun:" + std::string(__FUNCTION__)
-#define INI_DEBUG(x) std::cout << "INICPP " << TimeFormatter::format() << " : " << x << CODE_INFO << std::endl
+} // namespace debug
+} // namespace inicpp
+
+#define INICPP_CODE_INFO std::string(" \t``````|") + std::string(__FILE__) + ":" + std::to_string(__LINE__) + "  fun:" + std::string(__func__)
+#define INICPP_DEBUG_LOG(x) std::cout << "INICPP " << ::inicpp::debug::TimeFormatter::format() << " : " << x << INICPP_CODE_INFO << std::endl
 
 #else // #ifdef INICPP_DEBUG
-#define INI_DEBUG(x)
+#define INICPP_DEBUG_LOG(x)
 #endif // #ifdef INICPP_DEBUG
 
 namespace inicpp
@@ -91,13 +99,13 @@ namespace inicpp
 
 		virtual parentHelper *parent()
 		{
-			INI_DEBUG("called parentHelper virtual impl: need to impl parent");
+			INICPP_DEBUG_LOG("called parentHelper virtual impl: need to impl parent");
 			return nullptr;
 		}
 		virtual void setParent(parentHelper *parent)
 		{
 			(void)parent;
-			INI_DEBUG("called parentHelper virtual impl: need to impl setParent");
+			INICPP_DEBUG_LOG("called parentHelper virtual impl: need to impl setParent");
 		}
 		virtual bool set(const std::string &Section, const std::string &Key, const std::string &Value, const std::string &comment = "")
 		{
@@ -105,7 +113,7 @@ namespace inicpp
 			(void)Key;
 			(void)Value;
 			(void)comment;
-			INI_DEBUG("called parentHelper virtual impl: need to impl set");
+			INICPP_DEBUG_LOG("called parentHelper virtual impl: need to impl set");
 			return true;
 		}
 	};
@@ -117,7 +125,7 @@ namespace inicpp
 		~ValueProxy() {}
 
 		template <typename T>
-		ValueProxy(const T &value) : _value(to_string(value)) {}
+		ValueProxy(const T &value) = delete;
 
 		template <typename T>
 		static std::string to_string(const T &value)
@@ -131,6 +139,19 @@ namespace inicpp
 		T get() const
 		{
 			static_assert(!std::is_pointer<T>::value, "Pointer types are not supported for conversion.");
+			return getValue<T>();
+		}
+
+	private:
+		template <typename T>
+		typename std::enable_if<std::is_same<T, std::string>::value, T>::type getValue() const
+		{
+			return _value;
+		}
+
+		template <typename T>
+		typename std::enable_if<!std::is_same<T, std::string>::value, T>::type getValue() const
+		{
 			std::istringstream iss(_value);
 			T result;
 			if (!(iss >> result))
@@ -140,6 +161,7 @@ namespace inicpp
 			return result;
 		}
 
+	public:
 		operator char() const { return this->get<char>(); }
 		operator short() const { return this->get<short>(); }
 		operator int() const { return this->get<int>(); }
@@ -194,7 +216,7 @@ namespace inicpp
 		{
 			if (_value != other)
 			{
-				INI_DEBUG("Value Proxy Wanna Set Value: " << other);
+				INICPP_DEBUG_LOG("Value Proxy Wanna Set Value: " << other);
 				set(other);
 			}
 
@@ -218,7 +240,7 @@ namespace inicpp
 	private:
 		void set(const std::string &value)
 		{
-			if (value.empty() || _keyName.empty())
+			if (_keyName.empty())
 			{
 				return;
 			}
@@ -279,12 +301,20 @@ namespace inicpp
 
 		void append(const section &sec)
 		{
-			_sectionMap.insert(sec._sectionMap.begin(), sec._sectionMap.end());
+			for (std::map<std::string, ValueNode>::const_iterator it = sec._sectionMap.begin(); it != sec._sectionMap.end(); ++it)
+			{
+				_sectionMap[it->first] = it->second;
+			}
+		}
+
+		bool isKeyExists(const std::string &Key) const
+		{
+			return findValue(Key) != nullptr;
 		}
 
 		bool isKeyExist(const std::string &Key) const
 		{
-			return findValue(Key) != nullptr;
+			return isKeyExists(Key);
 		}
 
 		int getEndSection() const
@@ -421,11 +451,11 @@ namespace inicpp
 			}
 			catch (const std::invalid_argument &e)
 			{
-				INI_DEBUG("Invalid argument: " << e.what() << ",input:'" << value << "'");
+				INICPP_DEBUG_LOG("Invalid argument: " << e.what() << ",input:'" << value << "'");
 			}
 			catch (const std::out_of_range &e)
 			{
-				INI_DEBUG("Out of range: " << e.what() << ",input:'" << value << "'");
+				INICPP_DEBUG_LOG("Out of range: " << e.what() << ",input:'" << value << "'");
 			}
 			return result;
 		}
@@ -439,11 +469,11 @@ namespace inicpp
 			}
 			catch (const std::invalid_argument &e)
 			{
-				INI_DEBUG("Invalid argument: " << e.what() << ",input:'" << value << "'");
+				INICPP_DEBUG_LOG("Invalid argument: " << e.what() << ",input:'" << value << "'");
 			}
 			catch (const std::out_of_range &e)
 			{
-				INI_DEBUG("Out of range: " << e.what() << ",input:'" << value << "'");
+				INICPP_DEBUG_LOG("Out of range: " << e.what() << ",input:'" << value << "'");
 			}
 			return result;
 		}
@@ -630,19 +660,10 @@ namespace inicpp
 				return;
 			}
 
-			std::fstream input;
-			input.open(_configFileName.c_str(), std::ifstream::in | std::ifstream::out | std::fstream::app);
-
+			std::ifstream input(_configFileName.c_str(), std::ifstream::in);
 			if (!input.is_open())
 			{
-				INI_DEBUG("Failed to open(WR),try to open with readonly(R).");
-				input.clear();
-				input.open(_configFileName.c_str(), std::ifstream::in);
-			}
-
-			if (!input.is_open())
-			{
-				INI_DEBUG("Failed to open the input INI file for parsing! file:" << _configFileName);
+				INICPP_DEBUG_LOG("Failed to open the input INI file for parsing! file:" << _configFileName);
 				return;
 			}
 
@@ -701,43 +722,7 @@ namespace inicpp
 
 		bool set(const std::string &Section, const std::string &Key, const std::string &Value, const std::string &comment = "") override
 		{
-			parse();
-
-			std::string key = Key, value = Value;
-
-			trimEdges(key);
-
-			if (key == "" || value == "")
-			{
-				INI_DEBUG("Invalid parameter input: key[" << key << "],value[" << value << "]");
-				return false;
-			}
-
-			std::string keyValueData = key + "=" + value + "\n";
-			if (comment.length() > 0)
-			{
-				keyValueData = comment + "\n" + keyValueData;
-				if (comment[0] != ';')
-				{
-					keyValueData = ";" + keyValueData;
-				}
-			}
-
-			std::string updatedContent;
-			if (!buildUpdatedFileContent(Section, key, keyValueData, comment, updatedContent))
-			{
-				return false;
-			}
-
-			if (!replaceFileWithBackup(_configFileName, updatedContent))
-			{
-				return false;
-			}
-
-			// reload
-			parse();
-
-			return true;
+			return setValue(Section, Key, Value, comment, false);
 		}
 
 		bool set(const std::string &Section, const std::string &Key, const int Value, const std::string &comment = "")
@@ -786,12 +771,12 @@ namespace inicpp
 		// comment for section name of key
 		bool setComment(const std::string &Section, const std::string &Key, const std::string &comment)
 		{
-			return set(Section, Key, (*this)[Section].toString(Key), comment);
+			return setValue(Section, Key, (*this)[Section].toString(Key), comment, true);
 		}
 		// comment for no section name of key
 		bool setComment(const std::string &Key, const std::string &comment)
 		{
-			return set("", Key, (*this)[""].toString(Key), comment);
+			return setValue("", Key, (*this)[""].toString(Key), comment, true);
 		}
 
 		bool isSectionExists(const std::string &sectionName) const
@@ -825,16 +810,67 @@ namespace inicpp
 #endif
 
 	private:
-		bool buildUpdatedFileContent(const std::string &Section, const std::string &key, const std::string &keyValueData, const std::string &comment, std::string &content)
+		bool setValue(const std::string &Section, const std::string &Key, const std::string &Value, const std::string &comment, const bool allowEmptyValue)
 		{
-			std::ifstream input(_configFileName.c_str(), std::ifstream::in);
-			std::ostringstream output;
+			std::string key = Key, value = Value;
 
-			if (!input.is_open())
+			trimEdges(key);
+
+			if (key == "")
 			{
-				INI_DEBUG("Failed to open the input INI file for modification! File name:" << _configFileName);
+				INICPP_DEBUG_LOG("Invalid parameter input: key[" << key << "],value[" << value << "]");
 				return false;
 			}
+
+			(void)allowEmptyValue;
+
+			if (!ensureFileExists(_configFileName))
+			{
+				return false;
+			}
+
+			parse();
+
+			std::string updatedContent;
+			if (!buildUpdatedFileContent(Section, key, value, comment, updatedContent))
+			{
+				return false;
+			}
+
+			if (!replaceFileWithBackup(_configFileName, updatedContent))
+			{
+				return false;
+			}
+
+			// reload
+			parse();
+
+			return true;
+		}
+
+		bool buildUpdatedFileContent(const std::string &Section, const std::string &key, const std::string &value, const std::string &comment, std::string &content)
+		{
+			std::ifstream file(_configFileName.c_str(), std::ifstream::in | std::ifstream::binary);
+
+			if (!file.is_open())
+			{
+				INICPP_DEBUG_LOG("Failed to open the input INI file for modification! File name:" << _configFileName);
+				return false;
+			}
+
+			std::ostringstream fileBuffer;
+			fileBuffer << file.rdbuf();
+			if (file.bad() || fileBuffer.bad())
+			{
+				return false;
+			}
+
+			const std::string originalContent = fileBuffer.str();
+			const std::string lineEnding = detectLineEnding(originalContent);
+			const std::string keyValueData = formatKeyValueData(key, value, comment, lineEnding);
+
+			std::istringstream input(originalContent);
+			std::ostringstream output;
 
 			int line_number_mark = -1;
 			bool isInputDataWited = false;
@@ -854,6 +890,7 @@ namespace inicpp
 						int input_line_number = 0;
 						while (std::getline(input, lineData))
 						{
+							stripTrailingCarriageReturn(lineData);
 							++input_line_number;
 
 							if (input_line_number == (line_number_mark + 1))
@@ -862,7 +899,7 @@ namespace inicpp
 								output << keyValueData;
 							}
 
-							output << lineData << "\n";
+							output << lineData << lineEnding;
 						}
 
 						if (input.eof() && !isInputDataWited)
@@ -880,7 +917,7 @@ namespace inicpp
 					input.seekg(0, input.beg);
 
 					bool isHoldSection = false;
-					std::string newLine = "\n\n";
+					std::string newLine = lineEnding + lineEnding;
 					if (Section != "" && Section.find("[") == std::string::npos && Section.find("]") == std::string::npos && Section.find("=") == std::string::npos)
 					{
 						if (_iniData.empty() || _iniData.getSectionSize() <= 0)
@@ -897,14 +934,15 @@ namespace inicpp
 						// write key/value to head
 						if (isHoldSection)
 						{
-							output << newLine << "[" << Section << "]" << "\n";
+							output << newLine << "[" << Section << "]" << lineEnding;
 						}
 						output << keyValueData;
 						// write others
 						std::string lineData;
 						while (std::getline(input, lineData))
 						{
-							output << lineData << "\n";
+							stripTrailingCarriageReturn(lineData);
+							output << lineData << lineEnding;
 						}
 					}
 					// 2.section is not exist
@@ -914,12 +952,13 @@ namespace inicpp
 						std::string lineData;
 						while (std::getline(input, lineData))
 						{
-							output << lineData << "\n";
+							stripTrailingCarriageReturn(lineData);
+							output << lineData << lineEnding;
 						}
 						// write key/value to end
 						if (isHoldSection)
 						{
-							output << newLine << "[" << Section << "]" << "\n";
+							output << newLine << "[" << Section << "]" << lineEnding;
 						}
 						output << keyValueData;
 					}
@@ -934,10 +973,11 @@ namespace inicpp
 
 					while (std::getline(input, lineData))
 					{
+						stripTrailingCarriageReturn(lineData);
 						++input_line_number;
 
 						// delete old comment if new comment is set
-						if (input_line_number == (line_number_mark - 1) && lineData.length() > 0 && lineData[0] == ';' && comment != "")
+						if (input_line_number == (line_number_mark - 1) && isCommentLine(lineData) && comment != "")
 						{
 							continue;
 						}
@@ -948,13 +988,13 @@ namespace inicpp
 						}
 						else
 						{
-							output << lineData << "\n";
+							output << lineData << lineEnding;
 						}
 					}
 					break;
 				}
 
-				INI_DEBUG("error! inicpp lost process of set function");
+				INICPP_DEBUG_LOG("error! inicpp lost process of set function");
 				return false;
 
 			} while (false);
@@ -968,6 +1008,62 @@ namespace inicpp
 			return true;
 		}
 
+		static bool ensureFileExists(const std::string &fileName)
+		{
+			if (fileName.empty())
+			{
+				return false;
+			}
+
+			std::ifstream input(fileName.c_str(), std::ifstream::in | std::ifstream::binary);
+			if (input.good())
+			{
+				return true;
+			}
+
+			std::ofstream output(fileName.c_str(), std::ofstream::out | std::ofstream::binary | std::ofstream::app);
+			return output.good();
+		}
+
+		static std::string detectLineEnding(const std::string &content)
+		{
+			const std::string::size_type lf = content.find('\n');
+			if (lf != std::string::npos && lf > 0 && content[lf - 1] == '\r')
+			{
+				return "\r\n";
+			}
+			return "\n";
+		}
+
+		static void stripTrailingCarriageReturn(std::string &line)
+		{
+			if (!line.empty() && line[line.size() - 1] == '\r')
+			{
+				line.erase(line.size() - 1);
+			}
+		}
+
+		static bool hasCommentMarker(const std::string &comment)
+		{
+			const std::string::size_type pos = firstNonSpace(comment);
+			return pos < comment.size() && (comment[pos] == ';' || comment[pos] == '#');
+		}
+
+		static std::string formatKeyValueData(const std::string &key, const std::string &value, const std::string &comment, const std::string &lineEnding)
+		{
+			std::ostringstream data;
+			if (!comment.empty())
+			{
+				if (!hasCommentMarker(comment))
+				{
+					data << ";";
+				}
+				data << comment << lineEnding;
+			}
+			data << key << "=" << value << lineEnding;
+			return data.str();
+		}
+
 		static bool replaceFileWithBackup(const std::string &fileName, const std::string &content)
 		{
 			if (fileName.empty())
@@ -979,7 +1075,7 @@ namespace inicpp
 			const std::string backupFile = fileName + ".inicpp.bak";
 
 			{
-				std::ofstream output(tempFile.c_str(), std::ofstream::out | std::ofstream::trunc);
+				std::ofstream output(tempFile.c_str(), std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
 				if (!output.is_open())
 				{
 					return false;
@@ -1017,7 +1113,7 @@ namespace inicpp
 			{
 				if (std::rename(backupFile.c_str(), fileName.c_str()) != 0)
 				{
-					INI_DEBUG("Failed to restore original INI file from backup! File name:" << fileName);
+					INICPP_DEBUG_LOG("Failed to restore original INI file from backup! File name:" << fileName);
 				}
 				std::remove(tempFile.c_str());
 				return false;
@@ -1025,7 +1121,7 @@ namespace inicpp
 
 			if (std::remove(backupFile.c_str()) != 0)
 			{
-				INI_DEBUG("Failed to remove backup file: " << backupFile);
+				INICPP_DEBUG_LOG("Failed to remove backup file: " << backupFile);
 			}
 
 			return true;
@@ -1214,7 +1310,7 @@ namespace inicpp
 						   .base(),
 					   data.end());
 
-			// INI_DEBUG("trimEdges data:|" << data << "|");
+			// INICPP_DEBUG_LOG("trimEdges data:|" << data << "|");
 		}
 
 	private:
@@ -1226,4 +1322,4 @@ namespace inicpp
 
 } // namespace inicpp
 
-#endif
+#endif // INICPP_HPP

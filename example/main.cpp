@@ -20,9 +20,9 @@ namespace Configer
 		static const Server Load(inicpp::IniManager &_ini)
 		{
 			return Server{
-				ip : _ini["server"]["ip"],
-				port : _ini["server"]["port"],
-				isKeepalived : _ini["server"]["keepalived"]
+				_ini["server"]["ip"],
+				_ini["server"]["port"],
+				_ini["server"]["keepalived"]
 			};
 		}
 
@@ -38,9 +38,9 @@ namespace Configer
 			inicpp::IniManager _ini(CONFIG_FILE);
 
 			return Config{
-				title : _ini[""]["title"],
-				server : Server::Load(_ini),
-				PI : _ini["math"]["PI"],
+				_ini[""]["title"],
+				Server::Load(_ini),
+				_ini["math"]["PI"],
 			};
 		}
 

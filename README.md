@@ -29,12 +29,13 @@ When reading INI files, inicpp supports these common forms:
 - UTF-8 BOM at the beginning of the file.
 - Section headers such as `[server]`, `  [server]`, and `[ server ]`.
 - Key-value lines using `=` or `:`, such as `port=8080` and `host: localhost`.
-- Empty values in existing files, such as `key=`.
+- Empty values in existing files and values written with `set(..., "")`, such as `key=`.
 - Full-line comments using `;` or `#`, including lines with leading whitespace.
 - Inline comments after whitespace, such as `key=value ; comment` and `key=value # comment`.
 - Comment markers inside quoted or escaped values are preserved, such as `text="a ; b"` and `path=C:\tmp;cache`.
+- Duplicate keys in the same section, and duplicate section headers, use the last parsed value for the repeated key.
 
-Quoted values are returned as written; inicpp does not automatically remove quotes or unescape values. Multiline values, bare keys without `=` or `:`, and full formatting-preserving round trips are not supported.
+Quoted values are returned as written; inicpp does not automatically remove quotes or unescape values. Write operations preserve the existing LF or CRLF line-ending style, but multiline values, bare keys without `=` or `:`, and full formatting-preserving round trips are not supported.
 
 
 ---
@@ -72,7 +73,7 @@ int main()
 
 
 #### 2.read example
-Convert: From string to type (**Exception for error**).
+Convert: From string to typed values. Numeric and custom `get<T>()` conversions throw `std::runtime_error` when conversion fails. `std::string` conversion returns the stored text, and `bool` conversion treats only `"0"`, `"false"`, and `"no"` as false.
 ```cpp
 #include "inicpp.hpp"
 #include <iostream>
@@ -109,9 +110,11 @@ int main()
 }
 ```
 
+Comments written through `set()` or `setComment()` are prefixed with `;` by default. If the comment string already starts with `;` or `#`, that marker is kept.
+
 
 #### 4.toString()、toInt()、toDouble()
-Convert: From string to type (**No exception for error**).
+Convert: From string to type without throwing. `toString()` returns an empty string for missing keys, while `toInt()` and `toDouble()` return `0` or `0.0` when the key is missing or conversion fails.
 ```cpp
 #include "inicpp.hpp"
 #include <iostream>
@@ -248,11 +251,12 @@ public:
 		inicpp::IniManager _ini(CONFIG_FILE);
 
 		return Config{
-			title : _ini[""]["title"],
-			server : {ip : _ini["server"]["ip"],
-					  port : _ini["server"]["port"],
-					  isKeepalived : _ini["server"]["isKeepalived"]},
-			PI : _ini["math"]["PI"],
+			_ini[""]["title"],
+			Config::Server{
+				_ini["server"]["ip"],
+				_ini["server"]["port"],
+				_ini["server"]["isKeepalived"]},
+			_ini["math"]["PI"],
 		};
 	}
 };
